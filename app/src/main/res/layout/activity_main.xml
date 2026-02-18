@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
@@ -10,7 +9,6 @@
         android:orientation="vertical"
         android:padding="20dp">
 
-        <!-- Header -->
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -29,14 +27,12 @@
             android:textSize="13sp"
             android:textColor="?attr/colorOnSurfaceVariant" />
 
-        <!-- Status -->
         <TextView
             android:id="@+id/tvStatus"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="center"
             android:layout_marginTop="12dp"
-            android:text="○ Stopped"
             android:textSize="15sp" />
 
         <TextView
@@ -45,21 +41,17 @@
             android:layout_height="wrap_content"
             android:gravity="center"
             android:layout_marginTop="2dp"
-            android:text="🔑 Normal"
             android:textSize="12sp"
             android:textColor="?attr/colorOnSurfaceVariant" />
 
-        <!-- Start/Stop -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnToggle"
             android:layout_width="match_parent"
             android:layout_height="56dp"
             android:layout_marginTop="16dp"
-            android:text="▶  Start Monitoring"
-            android:textSize="16sp"
-            android:textAllCaps="false" />
+            android:textAllCaps="false"
+            android:textSize="16sp" />
 
-        <!-- Section Label -->
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -71,140 +63,38 @@
             android:letterSpacing="0.15"
             android:textColor="?attr/colorOnSurfaceVariant" />
 
-        <!-- Battery Card -->
-        <com.google.android.material.card.MaterialCardView
-            style="?attr/materialCardViewFilledStyle"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="6dp">
+        <!-- 1. Battery -->
+        <include layout="@layout/item_ext" android:id="@+id/extBattery" />
+        <!-- 2. CPU & RAM -->
+        <include layout="@layout/item_ext" android:id="@+id/extCpuRam" />
+        <!-- 3. Screen Time -->
+        <include layout="@layout/item_ext" android:id="@+id/extScreen" />
+        <!-- 4. Deep Sleep -->
+        <include layout="@layout/item_ext" android:id="@+id/extSleep" />
+        <!-- 5. Network Speed -->
+        <include layout="@layout/item_ext" android:id="@+id/extNetwork" />
+        <!-- 6. Data Usage -->
+        <include layout="@layout/item_ext" android:id="@+id/extData" />
+        <!-- 7. Unlock Counter -->
+        <include layout="@layout/item_ext" android:id="@+id/extUnlock" />
+        <!-- 8. Storage -->
+        <include layout="@layout/item_ext" android:id="@+id/extStorage" />
+        <!-- 9. Connection Info -->
+        <include layout="@layout/item_ext" android:id="@+id/extConnection" />
+        <!-- 10. Uptime -->
+        <include layout="@layout/item_ext" android:id="@+id/extUptime" />
+        <!-- 11. Step Counter -->
+        <include layout="@layout/item_ext" android:id="@+id/extSteps" />
+        <!-- 12. Speed Test -->
+        <include layout="@layout/item_ext" android:id="@+id/extSpeedTest" />
 
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:padding="16dp">
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:orientation="vertical">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="🔋  Battery"
-                        android:textSize="16sp"
-                        android:textColor="?attr/colorOnSurface" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Current, power, temperature, health"
-                        android:textSize="12sp"
-                        android:textColor="?attr/colorOnSurfaceVariant" />
-                </LinearLayout>
-
-                <com.google.android.material.materialswitch.MaterialSwitch
-                    android:id="@+id/swBattery"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content" />
-            </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
-
-        <!-- Network Speed Card -->
-        <com.google.android.material.card.MaterialCardView
-            style="?attr/materialCardViewFilledStyle"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="6dp">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:padding="16dp">
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:orientation="vertical">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="📶  Network Speed"
-                        android:textSize="16sp"
-                        android:textColor="?attr/colorOnSurface" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Real-time download and upload speed"
-                        android:textSize="12sp"
-                        android:textColor="?attr/colorOnSurfaceVariant" />
-                </LinearLayout>
-
-                <com.google.android.material.materialswitch.MaterialSwitch
-                    android:id="@+id/swNetwork"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content" />
-            </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
-
-        <!-- Unlock Counter Card -->
-        <com.google.android.material.card.MaterialCardView
-            style="?attr/materialCardViewFilledStyle"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="6dp">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:padding="16dp">
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:orientation="vertical">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="🔓  Unlock Counter"
-                        android:textSize="16sp"
-                        android:textColor="?attr/colorOnSurface" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Daily unlocks, detox tracking"
-                        android:textSize="12sp"
-                        android:textColor="?attr/colorOnSurfaceVariant" />
-                </LinearLayout>
-
-                <com.google.android.material.materialswitch.MaterialSwitch
-                    android:id="@+id/swUnlock"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content" />
-            </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
-
-        <!-- Footer -->
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="32dp"
             android:layout_marginBottom="24dp"
             android:gravity="center"
-            android:text="Disabled extension = zero resource usage\nSprint 1 • v1.0"
+            android:text="Disabled extension = zero resource usage\nSprint 2 • v1.0"
             android:textSize="11sp"
             android:textColor="?attr/colorOnSurfaceVariant" />
 

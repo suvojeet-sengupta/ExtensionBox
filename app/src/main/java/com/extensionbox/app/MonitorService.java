@@ -41,10 +41,6 @@ public class MonitorService extends Service {
         return moduleData.get(key);
     }
 
-    public static List<String> getAliveModuleKeys() {
-        return new ArrayList<>(moduleData.keySet());
-    }
-
     @Override
     public void onCreate() {
         super.onCreate();
@@ -53,12 +49,20 @@ public class MonitorService extends Service {
         sysAccess = new SystemAccess(this);
         modules = new ArrayList<>();
         modules.add(new BatteryModule());
+        modules.add(new CpuRamModule());
+        modules.add(new ScreenModule());
+        modules.add(new SleepModule());
         modules.add(new NetworkModule());
+        modules.add(new DataUsageModule());
         modules.add(new UnlockModule());
+        modules.add(new StorageModule());
+        modules.add(new ConnectionModule());
+        modules.add(new UptimeModule());
+        modules.add(new StepModule());
+        modules.add(new SpeedTestModule());
         lastTickTime = new HashMap<>();
 
         startForeground(NOTIF_ID, buildNotification());
-
         syncModules();
 
         handler = new Handler(Looper.getMainLooper());
@@ -67,7 +71,6 @@ public class MonitorService extends Service {
             scheduleNextTick();
         };
         scheduleNextTick();
-
         Prefs.setRunning(this, true);
     }
 
@@ -92,8 +95,7 @@ public class MonitorService extends Service {
         super.onDestroy();
     }
 
-    @Override
-    public IBinder onBind(Intent i) { return null; }
+    @Override public IBinder onBind(Intent i) { return null; }
 
     private void syncModules() {
         if (modules == null) return;
@@ -112,16 +114,13 @@ public class MonitorService extends Service {
 
     private void doTickCycle() {
         syncModules();
-
         long now = SystemClock.elapsedRealtime();
         boolean changed = false;
 
         for (Module m : modules) {
             if (!m.alive()) continue;
-
             Long last = lastTickTime.get(m.key());
             if (last == null) last = 0L;
-
             if (now - last >= m.tickIntervalMs()) {
                 m.tick();
                 m.checkAlerts(this);
@@ -130,82 +129,53 @@ public class MonitorService extends Service {
                 changed = true;
             }
         }
-
-        if (changed) {
-            updateNotification();
-        }
+        if (changed) updateNotification();
     }
 
     private void scheduleNextTick() {
-        if (modules == null) {
-            handler.postDelayed(tickRunnable, 5000);
-            return;
-        }
-
+        if (modules == null) { handler.postDelayed(tickRunnable, 5000); return; }
         long now = SystemClock.elapsedRealtime();
         long minDelay = Long.MAX_VALUE;
-
         for (Module m : modules) {
             if (!m.alive()) continue;
             Long last = lastTickTime.get(m.key());
             if (last == null) last = 0L;
-            long nextDue = last + m.tickIntervalMs();
-            long delay = nextDue - now;
+            long delay = (last + m.tickIntervalMs()) - now;
             if (delay < minDelay) minDelay = delay;
         }
-
         if (minDelay < 1000) minDelay = 1000;
         if (minDelay > 60000) minDelay = 60000;
         if (minDelay == Long.MAX_VALUE) minDelay = 5000;
-
         handler.postDelayed(tickRunnable, minDelay);
     }
 
     private void stopAll() {
         if (modules == null) return;
-        for (Module m : modules) {
-            if (m.alive()) m.stop();
-        }
+        for (Module m : modules) { if (m.alive()) m.stop(); }
         moduleData.clear();
     }
 
     private void createChannels() {
         NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-
-        NotificationChannel monCh = new NotificationChannel(
-                MONITOR_CH, "Extension Box Monitor", NotificationManager.IMPORTANCE_LOW);
-        monCh.setDescription("Continuous system monitoring");
-        monCh.setShowBadge(false);
-        monCh.enableVibration(false);
-        monCh.setSound(null, null);
+        NotificationChannel monCh = new NotificationChannel(MONITOR_CH, "Extension Box Monitor", NotificationManager.IMPORTANCE_LOW);
+        monCh.setShowBadge(false); monCh.enableVibration(false); monCh.setSound(null, null);
         nm.createNotificationChannel(monCh);
-
-        NotificationChannel alertCh = new NotificationChannel(
-                ALERT_CH, "Extension Box Alerts", NotificationManager.IMPORTANCE_HIGH);
-        alertCh.setDescription("Important alerts");
+        NotificationChannel alertCh = new NotificationChannel(ALERT_CH, "Extension Box Alerts", NotificationManager.IMPORTANCE_HIGH);
         nm.createNotificationChannel(alertCh);
     }
 
     private Notification buildNotification() {
-        String title = buildTitle();
-        String compact = buildCompact();
-        String expanded = buildExpanded();
-
         Intent openI = new Intent(this, MainActivity.class);
-        PendingIntent openPi = PendingIntent.getActivity(this, 0, openI,
-                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-
+        PendingIntent openPi = PendingIntent.getActivity(this, 0, openI, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         Intent stopI = new Intent(this, MonitorService.class).setAction(ACTION_STOP);
-        PendingIntent stopPi = PendingIntent.getService(this, 1, stopI,
-                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        PendingIntent stopPi = PendingIntent.getService(this, 1, stopI, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
         return new NotificationCompat.Builder(this, MONITOR_CH)
                 .setSmallIcon(R.drawable.ic_notif)
-                .setContentTitle(title)
-                .setContentText(compact)
-                .setStyle(new NotificationCompat.BigTextStyle().bigText(expanded))
-                .setOngoing(true)
-                .setOnlyAlertOnce(true)
+                .setContentTitle(buildTitle())
+                .setContentText(buildCompact())
+                .setStyle(new NotificationCompat.BigTextStyle().bigText(buildExpanded()))
+                .setOngoing(true).setOnlyAlertOnce(true)
                 .setPriority(NotificationCompat.PRIORITY_LOW)
                 .setCategory(NotificationCompat.CATEGORY_STATUS)
                 .setContentIntent(openPi)
@@ -218,11 +188,8 @@ public class MonitorService extends Service {
     private String buildTitle() {
         if (modules == null) return "Extension Box";
         for (Module m : modules) {
-            if (m.key().equals("battery") && m.alive()) {
-                if (m instanceof BatteryModule) {
-                    return "Extension Box • " + ((BatteryModule) m).getLevel() + "%";
-                }
-            }
+            if ("battery".equals(m.key()) && m.alive() && m instanceof BatteryModule)
+                return "Extension Box • " + ((BatteryModule) m).getLevel() + "%";
         }
         return "Extension Box";
     }
@@ -247,15 +214,12 @@ public class MonitorService extends Service {
             String d = m.detail();
             if (d != null && !d.isEmpty()) lines.add(d);
         }
-        return lines.isEmpty()
-                ? "Enable extensions from the app"
-                : TextUtils.join("\n", lines);
+        return lines.isEmpty() ? "Enable extensions from the app" : TextUtils.join("\n", lines);
     }
 
     private void updateNotification() {
         try {
-            NotificationManager nm = (NotificationManager)
-                    getSystemService(NOTIFICATION_SERVICE);
+            NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
             nm.notify(NOTIF_ID, buildNotification());
         } catch (Exception ignored) {}
     }
