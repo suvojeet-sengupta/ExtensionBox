@@ -2,6 +2,22 @@ plugins {
     id 'com.android.application'
 }
 
+
+def hasSigning = System.getenv("KEYSTORE_PATH") != null
+
+android {
+    signingConfigs {
+        release {
+            if (hasSigning) {
+                storeFile file(System.getenv("KEYSTORE_PATH"))
+                storePassword System.getenv("KEYSTORE_PASSWORD")
+                keyAlias System.getenv("KEY_ALIAS")
+                keyPassword System.getenv("KEY_PASSWORD")
+            }
+        }
+    }
+}
+
 android {
     namespace 'com.extensionbox.app'
     compileSdk 34
@@ -17,6 +33,7 @@ android {
     buildTypes {
         release {
             minifyEnabled false
+            if (hasSigning) signingConfig signingConfigs.release
         }
     }
 

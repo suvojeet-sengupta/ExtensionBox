@@ -2,7 +2,12 @@ name: Build APK
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
+      - "feature/**"
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
@@ -25,7 +30,7 @@ jobs:
       - name: Build Debug APK
         run: gradle assembleDebug
 
-      - name: Upload APK
+      - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
           name: ExtensionBox-debug
