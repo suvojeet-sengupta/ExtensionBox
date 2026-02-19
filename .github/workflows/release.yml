@@ -28,31 +28,21 @@ jobs:
 
       - name: Decode keystore
         run: |
-          mkdir -p app
-          echo "${{ secrets.KEYSTORE_B64 }}" | base64 -d > app/release.jks
-          test -f app/release.jks
+          echo "${{ secrets.KEYSTORE_B64 }}" | base64 -d > release.jks
 
       - name: Build Release APK
         env:
-          KEYSTORE_PATH: ${{ github.workspace }}/app/release.jks
+          KEYSTORE_PATH: release.jks
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: |
-          if [ -f "./gradlew" ]; then
-            chmod +x ./gradlew
-            ./gradlew assembleRelease
-          else
-            gradle assembleRelease
-          fi
+        run: ./gradlew :app:assembleRelease
 
-      - name: Upload Release APK (artifact)
-        uses: actions/upload-artifact@v4
-        with:
-          name: ExtensionBox-release
-          path: app/build/outputs/apk/release/app-release.apk
+      - name: Rename APK
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk ExtensionBox-${{ github.ref_name }}.apk
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: app/build/outputs/apk/release/app-release.apk
+          files: ExtensionBox-${{ github.ref_name }}.apk
