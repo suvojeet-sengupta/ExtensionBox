@@ -74,15 +74,25 @@ public class StepModule implements Module, SensorEventListener {
     @Override
     public void tick() {
         if (ctx == null) return;
-        int today = Calendar.getInstance().get(Calendar.DAY_OF_YEAR);
-        int lastDay = Prefs.getInt(ctx, "stp_last_day", -1);
-        if (lastDay != -1 && lastDay != today) {
-            Prefs.setLong(ctx, "stp_yesterday", dailySteps);
-            dailySteps = 0;
-            lastRaw = -1;
-            Prefs.setLong(ctx, "stp_today", 0);
-            Prefs.setBool(ctx, "stp_goal_fired", false);
+
+        if (Build.VERSION.SDK_INT >= 29) {
+            boolean granted = ContextCompat.checkSelfPermission(ctx, Manifest.permission.ACTIVITY_RECOGNITION)
+                    == PackageManager.PERMISSION_GRANTED;
+
+            if (permMissing && granted) {
+                permMissing = false;
+                if (sensorAvailable && sm != null && stepSensor != null) {
+                    try {
+                        sm.unregisterListener(this);
+                        sm.registerListener(this, stepSensor, SensorManager.SENSOR_DELAY_UI);
+                    } catch (Exception ignored) {}
+                }
+            } else if (!permMissing && !granted) {
+                permMissing = true;
+                try { if (sm != null) sm.unregisterListener(this); } catch (Exception ignored) {}
+            }
         }
+    }
         Prefs.setInt(ctx, "stp_last_day", today);
     }
 
