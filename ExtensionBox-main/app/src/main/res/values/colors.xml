@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Primary accent -->
+    <color name="seed">#6366F1</color>
+    
+    <!-- Status colors -->
+    <color name="status_running">#4CAF50</color>
+    <color name="status_stopped">#9E9E9E</color>
+    <color name="status_warning">#FF9800</color>
+    <color name="status_error">#F44336</color>
+    
+    <!-- Card backgrounds -->
+    <color name="card_background">#1A1A1A</color>
+    <color name="card_background_light">#F5F5F5</color>
+    
+    <!-- Text colors -->
+    <color name="text_primary">#FFFFFF</color>
+    <color name="text_secondary">#B0B0B0</color>
+    <color name="text_tertiary">#707070</color>
+</resources>
