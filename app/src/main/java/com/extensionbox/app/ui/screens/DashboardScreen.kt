@@ -25,6 +25,8 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 
+import androidx.compose.ui.text.style.TextAlign
+
 @Composable
 fun DashboardScreen() {
     val context = LocalContext.current
@@ -124,7 +126,7 @@ fun DashboardScreen() {
             enter = fadeIn() + expandVertically(),
             exit = fadeOut() + shrinkVertically()
         ) {
-            Box(modifier = Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
+            Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
                 Text(
                     text = "Tap start to begin monitoring system resources.",
                     style = MaterialTheme.typography.bodyLarge,
@@ -139,20 +141,20 @@ fun DashboardScreen() {
             enter = fadeIn(),
             exit = fadeOut()
         ) {
-            Box(modifier = Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
+            Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
             }
         }
 
         if (isRunning && dashData.isNotEmpty()) {
             LazyVerticalGrid(
-                columns = GridCells.Fixed(1), // Can be 2 for tablets if needed
+                columns = GridCells.Fixed(1),
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 contentPadding = PaddingValues(bottom = 24.dp)
             ) {
-                items(dashData, key = { it.first }) { (key, data) ->
+                items(dashData) { (key, data) ->
                     DashCard(key, data)
                 }
             }
@@ -165,9 +167,12 @@ fun DashCard(key: String, data: Map<String, String>) {
     val emoji = ModuleRegistry.emojiFor(key)
     val name = ModuleRegistry.nameFor(key)
 
-    FilledTonalCard(
+    Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.large
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        )
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {

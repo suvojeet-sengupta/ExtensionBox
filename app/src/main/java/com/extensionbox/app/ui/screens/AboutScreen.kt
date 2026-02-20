@@ -18,9 +18,16 @@ import com.extensionbox.app.R
 import com.extensionbox.app.network.UpdateChecker
 import kotlinx.coroutines.launch
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
+import android.net.Uri
+import android.content.Intent
+import androidx.compose.ui.platform.LocalUriHandler
+
 @Composable
 fun AboutScreen() {
     val coroutineScope = rememberCoroutineScope()
+    val uriHandler = LocalUriHandler.current
     var updateStatus by remember { mutableStateOf("Check for Updates") }
     var isChecking by remember { mutableStateOf(false) }
 
@@ -85,7 +92,6 @@ fun AboutScreen() {
                             if (releases.isNotEmpty()) {
                                 val latest = releases[0].tagName
                                 updateStatus = if (latest.contains(BuildConfig.VERSION_NAME)) {
-                                    "Up to date!"
                                     "✨ You are up to date!"
                                 } else {
                                     "New update: $latest"
@@ -116,16 +122,56 @@ fun AboutScreen() {
 
         Spacer(modifier = Modifier.weight(1f))
 
-        Surface(
-            color = MaterialTheme.colorScheme.secondaryContainer,
-            shape = MaterialTheme.shapes.full,
-            modifier = Modifier.padding(bottom = 16.dp)
+        Text(
+            text = "Developers",
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            DeveloperChip(
+                name = "Suvojeet",
+                role = "Lead Developer",
+                github = "https://github.com/suvojeet-sengupta",
+                onCli = { uriHandler.openUri(it) }
+            )
+            DeveloperChip(
+                name = "Omer",
+                role = "Core Contributor",
+                github = "https://github.com/omersusin",
+                onCli = { uriHandler.openUri(it) }
+            )
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+    }
+}
+
+@Composable
+fun DeveloperChip(name: String, role: String, github: String, onCli: (String) -> Unit) {
+    Surface(
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        shape = CircleShape,
+        modifier = Modifier.clickable { onCli(github) }
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = "Made with ❤️ by Suvojeet",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSecondaryContainer,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                text = name,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSecondaryContainer
+            )
+            Text(
+                text = role,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
             )
         }
     }

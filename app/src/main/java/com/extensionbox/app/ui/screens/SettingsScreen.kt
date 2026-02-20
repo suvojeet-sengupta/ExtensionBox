@@ -20,15 +20,12 @@ import java.io.InputStreamReader
 import rikka.shizuku.Shizuku
 import android.content.pm.PackageManager
 
-import androidx.compose.material.icons.filled.Palette
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Backup
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Upload
-import androidx.compose.ui.graphics.vector.ImageVector
-
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.*
+
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.clickable
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -226,7 +223,7 @@ fun SettingsScreen() {
                     headlineContent = { Text("Export Settings") },
                     supportingContent = { Text("Save configuration to a JSON file") },
                     leadingContent = { Icon(Icons.Default.Upload, contentDescription = null) },
-                    modifier = androidx.compose.foundation.clickable {
+                    modifier = Modifier.clickable {
                         exportLauncher.launch("extensionbox_settings.json")
                     }
                 )
@@ -235,7 +232,7 @@ fun SettingsScreen() {
                     headlineContent = { Text("Import Settings") },
                     supportingContent = { Text("Restore configuration from JSON") },
                     leadingContent = { Icon(Icons.Default.Download, contentDescription = null) },
-                    modifier = androidx.compose.foundation.clickable {
+                    modifier = Modifier.clickable {
                         importLauncher.launch(arrayOf("application/json"))
                     }
                 )
