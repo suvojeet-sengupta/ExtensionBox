@@ -20,7 +20,11 @@ import com.extensionbox.app.Prefs
 import com.extensionbox.app.ui.ModuleRegistry
 import kotlinx.coroutines.delay
 
-@OptIn(ExperimentalMaterial3Api::class)
+import androidx.compose.animation.*
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+
 @Composable
 fun DashboardScreen() {
     val context = LocalContext.current
@@ -58,73 +62,97 @@ fun DashboardScreen() {
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Text(
-            text = "Dashboard",
-            style = MaterialTheme.typography.headlineLarge,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            val statusText = if (isRunning) "● Running • $activeCount active" else "○ Stopped"
-            val statusColor = if (isRunning) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
-            
-            Text(
-                text = statusText,
-                style = MaterialTheme.typography.titleMedium,
-                color = statusColor
+    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+        ElevatedCard(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+            colors = CardDefaults.elevatedCardColors(
+                containerColor = if (isRunning) MaterialTheme.colorScheme.primaryContainer 
+                                else MaterialTheme.colorScheme.errorContainer
             )
-
-            Button(
-                onClick = {
-                    if (isRunning) {
-                        val intent = Intent(context, MonitorService::class.java).setAction(MonitorService.ACTION_STOP)
-                        context.startService(intent)
-                    } else {
-                        val intent = Intent(context, MonitorService::class.java)
-                        ContextCompat.startForegroundService(context, intent)
-                    }
-                    isRunning = !isRunning
-                },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isRunning) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-                )
+        ) {
+            Row(
+                modifier = Modifier.padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Icon(
-                    imageVector = if (isRunning) Icons.Default.Stop else Icons.Default.PlayArrow,
-                    contentDescription = null,
-                    modifier = Modifier.padding(end = 8.dp)
-                )
-                Text(if (isRunning) "Stop" else "Start")
+                Column(modifier = Modifier.weight(1f)) {
+                    val statusText = if (isRunning) "Active" else "Stopped"
+                    Text(
+                        text = statusText,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isRunning) MaterialTheme.colorScheme.onPrimaryContainer 
+                                else MaterialTheme.colorScheme.onErrorContainer
+                    )
+                    Text(
+                        text = if (isRunning) "$activeCount extensions running" else "Service is idle",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (isRunning) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                                else MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.7f)
+                    )
+                }
+
+                Button(
+                    onClick = {
+                        if (isRunning) {
+                            val intent = Intent(context, MonitorService::class.java).setAction(MonitorService.ACTION_STOP)
+                            context.startService(intent)
+                        } else {
+                            val intent = Intent(context, MonitorService::class.java)
+                            ContextCompat.startForegroundService(context, intent)
+                        }
+                        isRunning = !isRunning
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isRunning) MaterialTheme.colorScheme.error 
+                                        else MaterialTheme.colorScheme.primary
+                    ),
+                    shape = MaterialTheme.shapes.medium
+                ) {
+                    Icon(
+                        imageVector = if (isRunning) Icons.Default.Stop else Icons.Default.PlayArrow,
+                        contentDescription = null
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(if (isRunning) "Stop" else "Start")
+                }
             }
         }
 
-        if (!isRunning) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        AnimatedVisibility(
+            visible = !isRunning,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically()
+        ) {
+            Box(modifier = Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
                 Text(
-                    text = "Start monitoring to see live data.",
+                    text = "Tap start to begin monitoring system resources.",
                     style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.outline
+                    color = MaterialTheme.colorScheme.outline,
+                    textAlign = TextAlign.Center
                 )
             }
-        } else if (dashData.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(
-                    text = "Waiting for data...",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.outline
-                )
+        }
+
+        AnimatedVisibility(
+            visible = isRunning && dashData.isEmpty(),
+            enter = fadeIn(),
+            exit = fadeOut()
+        ) {
+            Box(modifier = Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
             }
-        } else {
-            LazyColumn(
+        }
+
+        if (isRunning && dashData.isNotEmpty()) {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(1), // Can be 2 for tablets if needed
                 modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(bottom = 24.dp)
             ) {
-                items(dashData) { (key, data) ->
+                items(dashData, key = { it.first }) { (key, data) ->
                     DashCard(key, data)
                 }
             }
@@ -137,17 +165,30 @@ fun DashCard(key: String, data: Map<String, String>) {
     val emoji = ModuleRegistry.emojiFor(key)
     val name = ModuleRegistry.nameFor(key)
 
-    Card(
+    FilledTonalCard(
         modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        shape = MaterialTheme.shapes.large
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = "$emoji  $name",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                    shape = MaterialTheme.shapes.small,
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(text = emoji, style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    text = name,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.ExtraBold
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
 
             data.forEach { (rawKey, value) ->
                 val labelText = rawKey.substringAfterLast('.').replaceFirstChar { it.uppercase() }.replace("_", " ")
@@ -157,13 +198,14 @@ fun DashCard(key: String, data: Map<String, String>) {
                 ) {
                     Text(
                         text = labelText,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.outline
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.secondary
                     )
                     Text(
                         text = value,
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.SemiBold
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }

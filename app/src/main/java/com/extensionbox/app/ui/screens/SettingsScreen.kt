@@ -20,6 +20,16 @@ import java.io.InputStreamReader
 import rikka.shizuku.Shizuku
 import android.content.pm.PackageManager
 
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Backup
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Upload
+import androidx.compose.ui.graphics.vector.ImageVector
+
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Warning
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen() {
@@ -75,7 +85,6 @@ fun SettingsScreen() {
                     val json = reader.readText()
                     Prefs.importJson(context, json)
                     Toast.makeText(context, "Settings imported successfully", Toast.LENGTH_SHORT).show()
-                    // Refresh state if needed, though Prefs updates might not reflect immediately without state holders observing Prefs
                 }
             } catch (e: Exception) {
                 Toast.makeText(context, "Import failed: ${e.message}", Toast.LENGTH_SHORT).show()
@@ -87,14 +96,8 @@ fun SettingsScreen() {
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(scrollState)
-            .padding(16.dp)
+            .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        Text(
-            text = "Settings",
-            style = MaterialTheme.typography.headlineLarge,
-            modifier = Modifier.padding(bottom = 24.dp)
-        )
-
         // Shizuku Section
         if (!shizukuPermissionGranted) {
              val isShizukuInstalled = try {
@@ -102,21 +105,32 @@ fun SettingsScreen() {
              } catch (e: Exception) { false }
 
              if (isShizukuInstalled) {
-                 Card(
+                 ElevatedCard(
                     modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+                    colors = CardDefaults.elevatedCardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer
+                    )
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Text(
+                                text = "Shizuku Permission",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        }
                         Text(
-                            text = "Shizuku Permission",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onErrorContainer
-                        )
-                        Text(
-                            text = "Shizuku is installed but permission is not granted. Grant permission to enable enhanced features.",
+                            text = "Shizuku is installed but permission is not granted. Grant it to enable system-level monitoring.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onErrorContainer,
-                            modifier = Modifier.padding(vertical = 8.dp)
+                            modifier = Modifier.padding(vertical = 12.dp)
                         )
                         Button(
                             onClick = { 
@@ -126,7 +140,8 @@ fun SettingsScreen() {
                                     Toast.makeText(context, "Failed to request permission", Toast.LENGTH_SHORT).show()
                                 }
                             },
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                            modifier = Modifier.fillMaxWidth()
                         ) {
                             Text("Grant Permission", color = MaterialTheme.colorScheme.onError)
                         }
@@ -135,130 +150,109 @@ fun SettingsScreen() {
              }
         }
 
-        Text(
-            text = "Appearance",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-
-        Card(
+        SettingHeader("Appearance")
+        
+        OutlinedCard(
             modifier = Modifier.fillMaxWidth(),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            shape = MaterialTheme.shapes.large
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = "App Theme",
-                    style = MaterialTheme.typography.titleMedium
-                )
-                
-                Box(modifier = Modifier.fillMaxWidth()) {
-                    OutlinedButton(
-                        onClick = { expanded = true },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(ThemeHelper.NAMES[themeIndex.coerceIn(0, ThemeHelper.NAMES.size - 1)])
-                    }
-                    
-                    DropdownMenu(
-                        expanded = expanded,
-                        onDismissRequest = { expanded = false },
-                        modifier = Modifier.fillMaxWidth(0.9f)
-                    ) {
-                        ThemeHelper.NAMES.forEachIndexed { index, name ->
-                            DropdownMenuItem(
-                                text = { Text(name) },
-                                onClick = {
-                                    themeIndex = index
-                                    Prefs.setInt(context, "app_theme", index)
-                                    expanded = false
-                                    // Triggering a restart for theme change (legacy behavior)
-                                    // In full Compose, we'd just update the theme state.
-                                }
-                            )
+            ListItem(
+                headlineContent = { Text("App Theme") },
+                supportingContent = { Text(ThemeHelper.NAMES[themeIndex.coerceIn(0, ThemeHelper.NAMES.size - 1)]) },
+                leadingContent = { Icon(Icons.Default.Palette, contentDescription = null) },
+                trailingContent = {
+                    Box {
+                        TextButton(onClick = { expanded = true }) {
+                            Text("Change")
+                        }
+                        DropdownMenu(
+                            expanded = expanded,
+                            onDismissRequest = { expanded = false }
+                        ) {
+                            ThemeHelper.NAMES.forEachIndexed { index, name ->
+                                DropdownMenuItem(
+                                    text = { Text(name) },
+                                    onClick = {
+                                        themeIndex = index
+                                        Prefs.setInt(context, "app_theme", index)
+                                        expanded = false
+                                        Toast.makeText(context, "Theme saved. Restart app to apply fully.", Toast.LENGTH_SHORT).show()
+                                    }
+                                )
+                            }
                         }
                     }
                 }
-            }
+            )
         }
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        Text(
-            text = "Monitoring",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
+        SettingHeader("Monitoring")
 
-        // Monitoring intervals and other settings...
-        Card(
-            modifier = Modifier.fillMaxWidth()
+        OutlinedCard(
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.large
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = "Context Aware Notification",
-                    style = MaterialTheme.typography.titleMedium
-                )
+            Column {
                 var contextAware by remember { mutableStateOf(Prefs.getBool(context, "notif_context_aware", true)) }
-                
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = "Show battery alerts in title",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    Switch(
-                        checked = contextAware,
-                        onCheckedChange = {
-                            contextAware = it
-                            Prefs.setBool(context, "notif_context_aware", it)
-                        }
-                    )
-                }
+                ListItem(
+                    headlineContent = { Text("Context Aware Notification") },
+                    supportingContent = { Text("Show alerts in notification title") },
+                    leadingContent = { Icon(Icons.Default.Notifications, contentDescription = null) },
+                    trailingContent = {
+                        Switch(
+                            checked = contextAware,
+                            onCheckedChange = {
+                                contextAware = it
+                                Prefs.setBool(context, "notif_context_aware", it)
+                            }
+                        )
+                    }
+                )
             }
         }
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        Text(
-            text = "Backup & Restore",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
+        SettingHeader("Backup & Restore")
 
-        Card(
-            modifier = Modifier.fillMaxWidth()
+        OutlinedCard(
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.large
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = "Settings Management",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(bottom = 16.dp)
+            Column {
+                ListItem(
+                    headlineContent = { Text("Export Settings") },
+                    supportingContent = { Text("Save configuration to a JSON file") },
+                    leadingContent = { Icon(Icons.Default.Upload, contentDescription = null) },
+                    modifier = androidx.compose.foundation.clickable {
+                        exportLauncher.launch("extensionbox_settings.json")
+                    }
                 )
-                
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = { exportLauncher.launch("extensionbox_settings.json") },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("Export Settings")
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                ListItem(
+                    headlineContent = { Text("Import Settings") },
+                    supportingContent = { Text("Restore configuration from JSON") },
+                    leadingContent = { Icon(Icons.Default.Download, contentDescription = null) },
+                    modifier = androidx.compose.foundation.clickable {
+                        importLauncher.launch(arrayOf("application/json"))
                     }
-                    
-                    Button(
-                        onClick = { importLauncher.launch(arrayOf("application/json")) },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("Import Settings")
-                    }
-                }
+                )
             }
         }
+        
+        Spacer(modifier = Modifier.height(32.dp))
     }
+}
+
+@Composable
+fun SettingHeader(title: String) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.labelLarge,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp)
+    )
 }

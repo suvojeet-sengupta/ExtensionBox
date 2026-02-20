@@ -18,7 +18,6 @@ import com.extensionbox.app.R
 import com.extensionbox.app.network.UpdateChecker
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AboutScreen() {
     val coroutineScope = rememberCoroutineScope()
@@ -29,50 +28,50 @@ fun AboutScreen() {
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Spacer(modifier = Modifier.height(32.dp))
-        
-        // Logo (Placeholder if not available)
-        Image(
-            painter = painterResource(id = R.drawable.ic_launcher_foreground),
-            contentDescription = "Logo",
-            modifier = Modifier.size(120.dp)
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Text(
-            text = "Extension Box",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold
-        )
-
-        Text(
-            text = "v${BuildConfig.VERSION_NAME}",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.secondary
-        )
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant
-            )
+        Surface(
+            modifier = Modifier.size(120.dp),
+            shape = MaterialTheme.shapes.extraLarge,
+            color = MaterialTheme.colorScheme.primaryContainer
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = "A lightweight system monitoring tool with a modular architecture.",
-                    textAlign = TextAlign.Center,
-                    style = MaterialTheme.typography.bodyLarge
+            Box(contentAlignment = Alignment.Center) {
+                Image(
+                    painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                    contentDescription = "Logo",
+                    modifier = Modifier.size(100.dp)
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = "Extension Box",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.ExtraBold
+            )
+            Text(
+                text = "v${BuildConfig.VERSION_NAME}",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+
+        OutlinedCard(
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.large
+        ) {
+            Column(modifier = Modifier.padding(20.dp)) {
+                Text(
+                    text = "A modern, lightweight system monitoring tool with a modular architecture built for Android enthusiasts.",
+                    textAlign = TextAlign.Center,
+                    style = MaterialTheme.typography.bodyLarge,
+                    lineHeight = 24.sp
+                )
+            }
+        }
 
         Button(
             onClick = {
@@ -86,13 +85,14 @@ fun AboutScreen() {
                             if (releases.isNotEmpty()) {
                                 val latest = releases[0].tagName
                                 updateStatus = if (latest.contains(BuildConfig.VERSION_NAME)) {
-                                    "You are up to date!"
+                                    "Up to date!"
+                                    "✨ You are up to date!"
                                 } else {
                                     "New update: $latest"
                                 }
                             }
                         } catch (e: Exception) {
-                            updateStatus = "Check failed: ${e.localizedMessage}"
+                            updateStatus = "Check failed"
                         } finally {
                             isChecking = false
                         }
@@ -100,17 +100,33 @@ fun AboutScreen() {
                 }
             },
             enabled = !isChecking,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.medium
         ) {
+            if (isChecking) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.onPrimary
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+            }
             Text(updateStatus)
         }
 
-        Spacer(modifier = Modifier.height(48.dp))
+        Spacer(modifier = Modifier.weight(1f))
 
-        Text(
-            text = "Created with ❤️ for Android",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.outline
-        )
+        Surface(
+            color = MaterialTheme.colorScheme.secondaryContainer,
+            shape = MaterialTheme.shapes.full,
+            modifier = Modifier.padding(bottom = 16.dp)
+        ) {
+            Text(
+                text = "Made with ❤️ by Suvojeet",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            )
+        }
     }
 }

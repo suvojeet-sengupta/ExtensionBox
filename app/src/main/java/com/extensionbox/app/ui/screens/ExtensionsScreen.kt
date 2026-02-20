@@ -12,7 +12,10 @@ import androidx.compose.ui.unit.dp
 import com.extensionbox.app.Prefs
 import com.extensionbox.app.ui.ModuleRegistry
 
-@OptIn(ExperimentalMaterial3Api::class)
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.ui.Alignment
+
 @Composable
 fun ExtensionsScreen() {
     val context = LocalContext.current
@@ -24,63 +27,78 @@ fun ExtensionsScreen() {
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Text(
-            text = "Extensions",
-            style = MaterialTheme.typography.headlineLarge,
-            modifier = Modifier.padding(bottom = 24.dp)
-        )
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        itemsIndexed((0 until ModuleRegistry.count()).toList()) { index, _ ->
+            val key = ModuleRegistry.keyAt(index)
+            val emoji = ModuleRegistry.emojiAt(index)
+            val name = ModuleRegistry.nameAt(index)
+            val desc = ModuleRegistry.descAt(index)
+            val state = moduleStates[index]
 
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            itemsIndexed((0 until ModuleRegistry.count()).toList()) { index, _ ->
-                val key = ModuleRegistry.keyAt(index)
-                val emoji = ModuleRegistry.emojiAt(index)
-                val name = ModuleRegistry.nameAt(index)
-                val desc = ModuleRegistry.descAt(index)
-                val state = moduleStates[index]
-
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                    onClick = {
-                        val newState = !state.value
-                        state.value = newState
-                        Prefs.setModuleEnabled(context, key, newState)
-                    }
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
-                    ) {
+            OutlinedCard(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.large,
+                onClick = {
+                    val newState = !state.value
+                    state.value = newState
+                    Prefs.setModuleEnabled(context, key, newState)
+                }
+            ) {
+                ListItem(
+                    headlineContent = {
                         Text(
-                            text = emoji,
-                            style = MaterialTheme.typography.headlineSmall,
-                            modifier = Modifier.padding(end = 16.dp)
+                            text = name,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
                         )
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = name,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = desc,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.secondary
-                            )
+                    },
+                    supportingContent = {
+                        Text(
+                            text = desc,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                        )
+                    },
+                    leadingContent = {
+                        Surface(
+                            shape = MaterialTheme.shapes.medium,
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = emoji,
+                                    style = MaterialTheme.typography.headlineSmall
+                                )
+                            }
                         }
+                    },
+                    trailingContent = {
                         Switch(
                             checked = state.value,
                             onCheckedChange = {
                                 state.value = it
                                 Prefs.setModuleEnabled(context, key, it)
-                            }
+                            },
+                            thumbContent = if (state.value) {
+                                {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(SwitchDefaults.IconSize)
+                                    )
+                                }
+                            } else null
                         )
-                    }
-                }
+                    },
+                    colors = ListItemDefaults.colors(
+                        containerColor = androidx.compose.ui.graphics.Color.Transparent
+                    )
+                )
             }
         }
     }
