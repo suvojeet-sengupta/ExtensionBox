@@ -9,6 +9,7 @@ import java.io.File
 import java.io.FileReader
 import java.io.InputStreamReader
 import java.util.Locale
+import rikka.shizuku.Shizuku
 
 class SystemAccess(ctx: Context) {
 
@@ -32,14 +33,26 @@ class SystemAccess(ctx: Context) {
 
         private fun detectShizuku(ctx: Context): Boolean {
             return try {
-                ctx.packageManager.getPackageInfo("moe.shizuku.privileged.api", 0)
-                val shizukuClass = Class.forName("rikka.shizuku.Shizuku")
-                val alive = shizukuClass.getMethod("pingBinder").invoke(null) as Boolean
-                if (!alive) return false
-                val result = shizukuClass.getMethod("checkSelfPermission").invoke(null) as Int
-                result == PackageManager.PERMISSION_GRANTED
-            } catch (e: Exception) {
+                if (Shizuku.pingBinder()) {
+                    if (Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) {
+                        return true
+                    } else if (Shizuku.shouldShowRequestPermissionRationale()) {
+                        return false // Permission not granted but available
+                    } else {
+                         // Request permission if not granted? For detection, we just return status.
+                         // But usually we request it somewhere.
+                         return false
+                    }
+                }
                 false
+            } catch (e: Exception) {
+                // Fallback to old detection if library fails or not present (though we added dependency)
+                try {
+                     ctx.packageManager.getPackageInfo("moe.shizuku.privileged.api", 0)
+                     return Shizuku.pingBinder()
+                } catch (e2: Exception) {
+                    false
+                }
             }
         }
 
@@ -71,7 +84,7 @@ class SystemAccess(ctx: Context) {
 
         private fun readFileShizuku(path: String): String? {
             return try {
-                val p = Runtime.getRuntime().exec(arrayOf("cat", path))
+                val p = Shizuku.newProcess(arrayOf("sh", "-c", "cat $path"), null, null)
                 val br = BufferedReader(InputStreamReader(p.inputStream))
                 val line = br.readLine()
                 br.close()

@@ -37,4 +37,28 @@ object Prefs {
 
     fun setString(c: Context, key: String, val_: String?) =
         p(c).edit().putString(key, val_).apply()
+
+    fun getAll(c: Context): Map<String, *> = p(c).all
+
+    fun importJson(c: Context, json: String) {
+        try {
+            val jsonObject = org.json.JSONObject(json)
+            val editor = p(c).edit()
+            val iterator = jsonObject.keys()
+            while (iterator.hasNext()) {
+                val key = iterator.next()
+                when (val value = jsonObject.get(key)) {
+                    is Boolean -> editor.putBoolean(key, value)
+                    is Int -> editor.putInt(key, value)
+                    is Long -> editor.putLong(key, value)
+                    is Float -> editor.putFloat(key, value)
+                    is String -> editor.putString(key, value)
+                    else -> editor.putString(key, value.toString())
+                }
+            }
+            editor.apply()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
 }
