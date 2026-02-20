@@ -1,16 +1,16 @@
-name: Build Debug APK
+name: Release APK (SIGNED)
 
 on:
-  workflow_dispatch:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  build_debug:
+  release:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,19 +26,36 @@ jobs:
           chmod +x gradlew
           bash ./gradlew --version
 
-      - name: Build debug APK
-        run: bash ./gradlew :app:assembleDebug --stacktrace
+      - name: Decode keystore
+        env:
+          SIGNING_KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+        run: |
+          echo "$SIGNING_KEYSTORE_BASE64" | base64 -d > $RUNNER_TEMP/release.jks
+          ls -la $RUNNER_TEMP/release.jks
+
+      - name: Build SIGNED release APK
+        env:
+          STORE_PASSWORD: ${{ secrets.SIGNING_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+        run: |
+          bash ./gradlew :app:assembleRelease --stacktrace \
+            -Pandroid.injected.signing.store.file=$RUNNER_TEMP/release.jks \
+            -Pandroid.injected.signing.store.password=$STORE_PASSWORD \
+            -Pandroid.injected.signing.key.alias=$KEY_ALIAS \
+            -Pandroid.injected.signing.key.password=$KEY_PASSWORD
 
       - name: Locate APK
         run: |
-          APK="$(find app/build/outputs/apk -type f -name '*debug*.apk' | head -n 1)"
+          APK="$(find app/build/outputs/apk -type f -name '*.apk' | grep -i release | head -n 1)"
           echo "APK=$APK" >> $GITHUB_ENV
+          echo "$APK"
           test -n "$APK"
 
       - name: Rename APK
-        run: cp "$APK" "ExtensionBox-${{ github.ref_name }}-debug.apk"
+        run: cp "$APK" "ExtensionBox-${{ github.ref_name }}.apk"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: ExtensionBox-${{ github.ref_name }}-debug.apk
+          files: ExtensionBox-${{ github.ref_name }}.apk
