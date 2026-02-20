@@ -34,25 +34,11 @@ class SystemAccess(ctx: Context) {
         private fun detectShizuku(ctx: Context): Boolean {
             return try {
                 if (Shizuku.pingBinder()) {
-                    if (Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) {
-                        return true
-                    } else if (Shizuku.shouldShowRequestPermissionRationale()) {
-                        return false // Permission not granted but available
-                    } else {
-                         // Request permission if not granted? For detection, we just return status.
-                         // But usually we request it somewhere.
-                         return false
-                    }
+                    return Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
                 }
                 false
             } catch (e: Exception) {
-                // Fallback to old detection if library fails or not present (though we added dependency)
-                try {
-                     ctx.packageManager.getPackageInfo("moe.shizuku.privileged.api", 0)
-                     return Shizuku.pingBinder()
-                } catch (e2: Exception) {
-                    false
-                }
+                false
             }
         }
 
@@ -84,6 +70,7 @@ class SystemAccess(ctx: Context) {
 
         private fun readFileShizuku(path: String): String? {
             return try {
+                // Use the 3-parameter signature (String[], envp, dir) which is public in Shizuku 12.1.0
                 val p = Shizuku.newProcess(arrayOf("sh", "-c", "cat $path"), null, null)
                 val br = BufferedReader(InputStreamReader(p.inputStream))
                 val line = br.readLine()

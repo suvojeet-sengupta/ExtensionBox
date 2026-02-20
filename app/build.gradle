@@ -74,8 +74,8 @@ dependencies {
     implementation 'com.squareup.retrofit2:converter-gson:3.0.0'
 
     // Shizuku
-    implementation "dev.rikka.shizuku:api:13.1.5"
-    implementation "dev.rikka.shizuku:provider:13.1.5"
+    implementation "dev.rikka.shizuku:api:12.1.0"
+    implementation "dev.rikka.shizuku:provider:12.1.0"
 
     // Material Components (required for DynamicColors)
     implementation 'com.google.android.material:material:1.13.0-alpha10'
