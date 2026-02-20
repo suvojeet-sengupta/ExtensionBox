@@ -1,0 +1,133 @@
+package com.extensionbox.app.widgets
+
+import android.app.PendingIntent
+import android.appwidget.AppWidgetManager
+import android.appwidget.AppWidgetProvider
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.widget.RemoteViews
+import com.extensionbox.app.MainActivity
+import com.extensionbox.app.MonitorService
+import com.extensionbox.app.R
+import com.extensionbox.app.ui.ModuleRegistry
+
+/**
+ * A single reusable AppWidgetProvider used for all module widgets.
+ */
+open class ModuleWidgetProvider : AppWidgetProvider() {
+
+    // Subclass aliases
+    class BatteryWidgetProvider : ModuleWidgetProvider()
+    class CpuRamWidgetProvider : ModuleWidgetProvider()
+    class ScreenWidgetProvider : ModuleWidgetProvider()
+    class SleepWidgetProvider : ModuleWidgetProvider()
+    class NetworkWidgetProvider : ModuleWidgetProvider()
+    class DataWidgetProvider : ModuleWidgetProvider()
+    class UnlockWidgetProvider : ModuleWidgetProvider()
+    class StorageWidgetProvider : ModuleWidgetProvider()
+    class ConnectionWidgetProvider : ModuleWidgetProvider()
+    class UptimeWidgetProvider : ModuleWidgetProvider()
+    class StepWidgetProvider : ModuleWidgetProvider()
+    class SpeedTestWidgetProvider : ModuleWidgetProvider()
+    class FapWidgetProvider : ModuleWidgetProvider()
+
+    override fun onUpdate(ctx: Context, mgr: AppWidgetManager, widgetIds: IntArray) {
+        val key = resolveKey(javaClass)
+        for (id in widgetIds) {
+            updateWidget(ctx, mgr, id, key)
+        }
+    }
+
+    companion object {
+        private fun resolveKey(cls: Class<*>): String {
+            val name = cls.simpleName
+            return when (name) {
+                "BatteryWidgetProvider" -> "battery"
+                "CpuRamWidgetProvider" -> "cpu_ram"
+                "ScreenWidgetProvider" -> "screen"
+                "SleepWidgetProvider" -> "sleep"
+                "NetworkWidgetProvider" -> "network"
+                "DataWidgetProvider" -> "data"
+                "UnlockWidgetProvider" -> "unlock"
+                "StorageWidgetProvider" -> "storage"
+                "ConnectionWidgetProvider" -> "connection"
+                "UptimeWidgetProvider" -> "uptime"
+                "StepWidgetProvider" -> "steps"
+                "SpeedTestWidgetProvider" -> "speedtest"
+                "FapWidgetProvider" -> "fap"
+                else -> "battery"
+            }
+        }
+
+        private fun updateWidget(ctx: Context, mgr: AppWidgetManager, widgetId: Int, key: String) {
+            val views = RemoteViews(ctx.packageName, R.layout.widget_module)
+
+            // Header
+            val emoji = ModuleRegistry.emojiFor(key)
+            val name = ModuleRegistry.nameFor(key)
+            views.setTextViewText(R.id.widgetTitle, "$emoji  $name")
+
+            // Data
+            val data = MonitorService.getModuleData(key)
+            val body = StringBuilder()
+            if (data != null && data.isNotEmpty()) {
+                var shown = 0
+                for ((rawKey, value) in data) {
+                    if (shown >= 6) break
+                    shown++
+                    val label = rawKey.substringAfterLast('.').replaceFirstChar { it.uppercase() }.replace("_", " ")
+                    if (body.isNotEmpty()) body.append("\n")
+                    body.append(label).append(": ").append(value)
+                }
+            } else {
+                body.append("No data — start monitoring")
+            }
+            views.setTextViewText(R.id.widgetBody, body.toString())
+
+            // Click -> open app
+            val openIntent = Intent(ctx, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
+            val pi = PendingIntent.getActivity(
+                ctx, widgetId, openIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            views.setOnClickPendingIntent(R.id.widgetRoot, pi)
+
+            mgr.updateAppWidget(widgetId, views)
+        }
+
+        @JvmStatic
+        fun updateAllWidgets(ctx: Context) {
+            val mgr = AppWidgetManager.getInstance(ctx) ?: return
+
+            val providers = arrayOf(
+                BatteryWidgetProvider::class.java,
+                CpuRamWidgetProvider::class.java,
+                ScreenWidgetProvider::class.java,
+                SleepWidgetProvider::class.java,
+                NetworkWidgetProvider::class.java,
+                DataWidgetProvider::class.java,
+                UnlockWidgetProvider::class.java,
+                StorageWidgetProvider::class.java,
+                ConnectionWidgetProvider::class.java,
+                UptimeWidgetProvider::class.java,
+                StepWidgetProvider::class.java,
+                SpeedTestWidgetProvider::class.java,
+                FapWidgetProvider::class.java
+            )
+
+            for (providerCls in providers) {
+                val key = resolveKey(providerCls)
+                val comp = ComponentName(ctx, providerCls)
+                val ids = mgr.getAppWidgetIds(comp)
+                if (ids != null) {
+                    for (id in ids) {
+                        updateWidget(ctx, mgr, id, key)
+                    }
+                }
+            }
+        }
+    }
+}
