@@ -48,6 +48,7 @@ fun SettingsScreen() {
     var expanded by remember { mutableStateOf(false) }
 
     // Shizuku State
+    var isShizukuRunning by remember { mutableStateOf(try { Shizuku.pingBinder() } catch (e: Exception) { false }) }
     var shizukuPermissionGranted by remember { 
         mutableStateOf(
             try {
@@ -59,9 +60,17 @@ fun SettingsScreen() {
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
+                isShizukuRunning = try { Shizuku.pingBinder() } catch (e: Exception) { false }
                 shizukuPermissionGranted = try {
-                    Shizuku.pingBinder() && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
+                    isShizukuRunning && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
                 } catch (e: Exception) { false }
+                
+                // MT Manager-like auto request
+                if (isShizukuRunning && !shizukuPermissionGranted) {
+                    try {
+                        Shizuku.requestPermission(1001)
+                    } catch (_: Exception) {}
+                }
             }
         }
         
@@ -71,6 +80,7 @@ fun SettingsScreen() {
         
         val binderListener = object : Shizuku.OnBinderReceivedListener {
             override fun onBinderReceived() {
+                isShizukuRunning = true
                 shizukuPermissionGranted = try {
                     Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
                 } catch (e: Exception) { false }
@@ -153,7 +163,6 @@ fun SettingsScreen() {
                 HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                 
                 // Shizuku Specific Settings
-                val isShizukuRunning = try { Shizuku.pingBinder() } catch (e: Exception) { false }
                 ListItem(
                     headlineContent = { Text("Shizuku Support") },
                     supportingContent = { 
