@@ -1,77 +1,126 @@
 package com.extensionbox.app
 
 import android.content.Context
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.*
+import androidx.datastore.preferences.preferencesDataStore
+import androidx.datastore.preferences.SharedPreferencesMigration
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.runBlocking
+import org.json.JSONObject
+
+val Context.dataStore: DataStore<Preferences> by preferencesDataStore(
+    name = "ebox_settings",
+    produceMigrations = { context ->
+        listOf(SharedPreferencesMigration(context, "ebox"))
+    }
+)
 
 object Prefs {
-    private const val FILE = "ebox"
 
-    private fun p(c: Context) = c.getSharedPreferences(FILE, Context.MODE_PRIVATE)
+    // --- Synchronous Getters (Legacy bridge, uses runBlocking) ---
+    // Note: In 2026 practice, we should migrate callers to observe flows or use suspended functions.
+    // This bridge allows the app to function while we refactor.
 
-    fun isModuleEnabled(c: Context, key: String, def: Boolean): Boolean =
-        p(c).getBoolean("m_${key}_enabled", def)
+    fun isModuleEnabled(c: Context, key: String, def: Boolean): Boolean = runBlocking {
+        val prefKey = booleanPreferencesKey("m_${key}_enabled")
+        c.dataStore.data.map { it[prefKey] ?: def }.first()
+    }
 
-    fun setModuleEnabled(c: Context, key: String, val_: Boolean) =
-        p(c).edit().putBoolean("m_${key}_enabled", val_).apply()
+    fun setModuleEnabled(c: Context, key: String, value: Boolean) = runBlocking {
+        val prefKey = booleanPreferencesKey("m_${key}_enabled")
+        c.dataStore.edit { it[prefKey] = value }
+    }
 
-    fun isRunning(c: Context): Boolean = p(c).getBoolean("running", false)
+    fun isRunning(c: Context): Boolean = runBlocking {
+        val prefKey = booleanPreferencesKey("running")
+        c.dataStore.data.map { it[prefKey] ?: false }.first()
+    }
 
-    fun setRunning(c: Context, val_: Boolean) =
-        p(c).edit().putBoolean("running", val_).apply()
+    fun setRunning(c: Context, value: Boolean) = runBlocking {
+        val prefKey = booleanPreferencesKey("running")
+        c.dataStore.edit { it[prefKey] = value }
+    }
 
-    fun getInt(c: Context, key: String, def: Int): Int = p(c).getInt(key, def)
+    fun getInt(c: Context, key: String, def: Int): Int = runBlocking {
+        val prefKey = intPreferencesKey(key)
+        c.dataStore.data.map { it[prefKey] ?: def }.first()
+    }
 
-    fun setInt(c: Context, key: String, val_: Int) =
-        p(c).edit().putInt(key, val_).apply()
+    fun setInt(c: Context, key: String, value: Int) = runBlocking {
+        val prefKey = intPreferencesKey(key)
+        c.dataStore.edit { it[prefKey] = value }
+    }
 
-    fun getLong(c: Context, key: String, def: Long): Long = p(c).getLong(key, def)
+    fun getLong(c: Context, key: String, def: Long): Long = runBlocking {
+        val prefKey = longPreferencesKey(key)
+        c.dataStore.data.map { it[prefKey] ?: def }.first()
+    }
 
-    fun setLong(c: Context, key: String, val_: Long) =
-        p(c).edit().putLong(key, val_).apply()
+    fun setLong(c: Context, key: String, value: Long) = runBlocking {
+        val prefKey = longPreferencesKey(key)
+        c.dataStore.edit { it[prefKey] = value }
+    }
 
-    fun getBool(c: Context, key: String, def: Boolean): Boolean = p(c).getBoolean(key, def)
+    fun getBool(c: Context, key: String, def: Boolean): Boolean = runBlocking {
+        val prefKey = booleanPreferencesKey(key)
+        c.dataStore.data.map { it[prefKey] ?: def }.first()
+    }
 
-    fun setBool(c: Context, key: String, val_: Boolean) =
-        p(c).edit().putBoolean(key, val_).apply()
+    fun setBool(c: Context, key: String, value: Boolean) = runBlocking {
+        val prefKey = booleanPreferencesKey(key)
+        c.dataStore.edit { it[prefKey] = value }
+    }
 
-    fun getString(c: Context, key: String, def: String?): String? = p(c).getString(key, def)
+    fun getString(c: Context, key: String, def: String?): String? = runBlocking {
+        val prefKey = stringPreferencesKey(key)
+        c.dataStore.data.map { it[prefKey] ?: def }.first()
+    }
 
-    fun setString(c: Context, key: String, val_: String?) =
-        p(c).edit().putString(key, val_).apply()
-
-    fun getAll(c: Context): Map<String, *> = p(c).all
-
-    fun clearAll(c: Context) = p(c).edit().clear().apply()
-
-    fun resetDailyStats(c: Context) {
-        p(c).edit().apply {
-            putInt("ulk_today", 0)
-            putLong("stp_today", 0L)
-            putLong("dat_daily_total", 0L)
-            putLong("dat_daily_wifi", 0L)
-            putLong("dat_daily_mobile", 0L)
-            putLong("scr_on_acc", 0L)
-            putInt("fap_today", 0)
-            apply()
+    fun setString(c: Context, key: String, value: String?) = runBlocking {
+        val prefKey = stringPreferencesKey(key)
+        c.dataStore.edit { 
+            if (value == null) it.remove(prefKey) else it[prefKey] = value
         }
     }
 
-    fun importJson(c: Context, json: String) {
+    fun getAll(c: Context): Map<String, *> = runBlocking {
+        c.dataStore.data.first().asMap().mapKeys { it.key.name }
+    }
+
+    fun clearAll(c: Context) = runBlocking {
+        c.dataStore.edit { it.clear() }
+    }
+
+    fun resetDailyStats(c: Context) = runBlocking {
+        c.dataStore.edit {
+            it[intPreferencesKey("ulk_today")] = 0
+            it[longPreferencesKey("stp_today")] = 0L
+            it[longPreferencesKey("dat_daily_total")] = 0L
+            it[longPreferencesKey("dat_daily_wifi")] = 0L
+            it[longPreferencesKey("dat_daily_mobile")] = 0L
+            it[longPreferencesKey("scr_on_acc")] = 0L
+            it[intPreferencesKey("fap_today")] = 0
+        }
+    }
+
+    fun importJson(c: Context, json: String) = runBlocking {
         try {
-            val jsonObject = org.json.JSONObject(json)
-            val editor = p(c).edit()
-            val iterator = jsonObject.keys()
-            while (iterator.hasNext()) {
-                val key = iterator.next()
-                when (val value = jsonObject.get(key)) {
-                    is Boolean -> editor.putBoolean(key, value)
-                    is Int -> editor.putInt(key, value)
-                    is Long -> editor.putLong(key, value)
-                    is Float -> editor.putFloat(key, value)
-                    is String -> editor.putString(key, value)
-                    else -> editor.putString(key, value.toString())
+            val jsonObject = JSONObject(json)
+            c.dataStore.edit { prefs ->
+                val keys = jsonObject.keys()
+                while (keys.hasNext()) {
+                    val key = keys.next()
+                    when (val value = jsonObject.get(key)) {
+                        is Boolean -> prefs[booleanPreferencesKey(key)] = value
+                        is Int -> prefs[intPreferencesKey(key)] = value
+                        is Long -> prefs[longPreferencesKey(key)] = value
+                        is Double -> prefs[doublePreferencesKey(key)] = value
+                        is String -> prefs[stringPreferencesKey(key)] = value
+                    }
                 }
             }
-            editor.apply()
         } catch (e: Exception) {
             e.printStackTrace()
         }
