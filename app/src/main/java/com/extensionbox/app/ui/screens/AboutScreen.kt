@@ -135,13 +135,13 @@ fun AboutScreen() {
         ) {
             DeveloperChip(
                 name = "Suvojeet",
-                role = "Lead Developer",
+                role = "Kotlin, Shizuku & M3",
                 github = "https://github.com/suvojeet-sengupta",
                 onCli = { uriHandler.openUri(it) }
             )
             DeveloperChip(
                 name = "Omer",
-                role = "Core Contributor",
+                role = "Contributor",
                 github = "https://github.com/omersusin",
                 onCli = { uriHandler.openUri(it) }
             )

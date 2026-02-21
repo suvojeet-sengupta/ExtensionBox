@@ -40,6 +40,21 @@ object Prefs {
 
     fun getAll(c: Context): Map<String, *> = p(c).all
 
+    fun clearAll(c: Context) = p(c).edit().clear().apply()
+
+    fun resetDailyStats(c: Context) {
+        p(c).edit().apply {
+            putInt("ulk_today", 0)
+            putLong("stp_today", 0L)
+            putLong("dat_daily_total", 0L)
+            putLong("dat_daily_wifi", 0L)
+            putLong("dat_daily_mobile", 0L)
+            putLong("scr_on_acc", 0L)
+            putInt("fap_today", 0)
+            apply()
+        }
+    }
+
     fun importJson(c: Context, json: String) {
         try {
             val jsonObject = org.json.JSONObject(json)

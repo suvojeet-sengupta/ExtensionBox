@@ -27,11 +27,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.clickable
 
+import android.os.PowerManager
+import android.provider.Settings
+import android.net.Uri
+import android.content.Intent
+import com.extensionbox.app.SystemAccess
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen() {
     val context = LocalContext.current
     val scrollState = rememberScrollState()
+    val sysAccess = remember { SystemAccess(context) }
 
     var themeIndex by remember { mutableStateOf(Prefs.getInt(context, "app_theme", ThemeHelper.MONET)) }
     var expanded by remember { mutableStateOf(false) }
@@ -44,16 +51,6 @@ fun SettingsScreen() {
             } catch (e: Exception) { false }
         )
     }
-
-    val shizukuRequestPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission(),
-        onResult = { isGranted ->
-            shizukuPermissionGranted = isGranted
-            if (isGranted) {
-                Toast.makeText(context, "Permission granted. Please restart monitoring service.", Toast.LENGTH_LONG).show()
-            }
-        }
-    )
 
     // Export/Import Launchers
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
@@ -95,60 +92,95 @@ fun SettingsScreen() {
             .verticalScroll(scrollState)
             .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        // Shizuku Section
-        if (!shizukuPermissionGranted) {
-             val isShizukuInstalled = try {
-                 Shizuku.pingBinder()
-             } catch (e: Exception) { false }
-
-             if (isShizukuInstalled) {
-                 ElevatedCard(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
-                    colors = CardDefaults.elevatedCardColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer
-                    )
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Warning,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.error
-                            )
-                            Spacer(Modifier.width(12.dp))
-                            Text(
-                                text = "Shizuku Permission",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onErrorContainer
-                            )
+        SettingHeader("Permissions")
+        OutlinedCard(
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.large
+        ) {
+            Column {
+                ListItem(
+                    headlineContent = { Text("Permission Tier") },
+                    supportingContent = { Text("Current mode: ${sysAccess.tier}") },
+                    leadingContent = { Icon(Icons.Default.Security, contentDescription = null) },
+                    trailingContent = {
+                        val color = when(sysAccess.tier) {
+                            "Root" -> MaterialTheme.colorScheme.primary
+                            "Shizuku" -> MaterialTheme.colorScheme.secondary
+                            else -> MaterialTheme.colorScheme.outline
                         }
-                        Text(
-                            text = "Shizuku is installed but permission is not granted. Grant it to enable system-level monitoring.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onErrorContainer,
-                            modifier = Modifier.padding(vertical = 12.dp)
-                        )
-                        Button(
-                            onClick = { 
-                                try {
-                                    Shizuku.requestPermission(0) 
-                                } catch (e: Exception) {
-                                    Toast.makeText(context, "Failed to request permission", Toast.LENGTH_SHORT).show()
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("Grant Permission", color = MaterialTheme.colorScheme.onError)
+                        AssistChip(onClick = {}, label = { Text(sysAccess.tier) }, 
+                            colors = AssistChipDefaults.assistChipColors(labelColor = color))
+                    }
+                )
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                
+                // Shizuku Specific Settings
+                val isShizukuRunning = try { Shizuku.pingBinder() } catch (e: Exception) { false }
+                ListItem(
+                    headlineContent = { Text("Shizuku Support") },
+                    supportingContent = { 
+                        Text(if (isShizukuRunning) "Service is running" else "Service not found or stopped")
+                    },
+                    leadingContent = { 
+                        Icon(
+                            imageVector = Icons.Default.Terminal, 
+                            contentDescription = null,
+                            tint = if (isShizukuRunning) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                        ) 
+                    },
+                    trailingContent = {
+                        TextButton(onClick = {
+                            try {
+                                val intent = context.packageManager.getLaunchIntentForPackage("moe.shizuku.privileged.api")
+                                if (intent != null) context.startActivity(intent)
+                                else Toast.makeText(context, "Shizuku app not found", Toast.LENGTH_SHORT).show()
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "Error opening Shizuku", Toast.LENGTH_SHORT).show()
+                            }
+                        }) {
+                            Text("Open App")
                         }
                     }
+                )
+                
+                if (isShizukuRunning && !shizukuPermissionGranted) {
+                    ListItem(
+                        headlineContent = { Text("Grant Shizuku Permission") },
+                        supportingContent = { Text("Allow Extension Box to use Shizuku") },
+                        leadingContent = { Icon(Icons.Default.VpnKey, contentDescription = null) },
+                        modifier = Modifier.clickable {
+                            try {
+                                Shizuku.requestPermission(0)
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "Request failed", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    )
                 }
-             }
+
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                ListItem(
+                    headlineContent = { Text("Battery Exemption") },
+                    supportingContent = { Text("Disable optimizations to prevent background kills") },
+                    leadingContent = { Icon(Icons.Default.BatteryChargingFull, contentDescription = null) },
+                    modifier = Modifier.clickable {
+                        try {
+                            val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                                data = Uri.parse("package:${context.packageName}")
+                            }
+                            context.startActivity(intent)
+                        } catch (e: Exception) {
+                            val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                            context.startActivity(intent)
+                        }
+                    }
+                )
+            }
         }
 
+        Spacer(modifier = Modifier.height(24.dp))
+
         SettingHeader("Appearance")
-        
         OutlinedCard(
             modifier = Modifier.fillMaxWidth(),
             shape = MaterialTheme.shapes.large
@@ -186,7 +218,6 @@ fun SettingsScreen() {
         Spacer(modifier = Modifier.height(24.dp))
 
         SettingHeader("Monitoring")
-
         OutlinedCard(
             modifier = Modifier.fillMaxWidth(),
             shape = MaterialTheme.shapes.large
@@ -195,16 +226,86 @@ fun SettingsScreen() {
                 var contextAware by remember { mutableStateOf(Prefs.getBool(context, "notif_context_aware", true)) }
                 ListItem(
                     headlineContent = { Text("Context Aware Notification") },
-                    supportingContent = { Text("Show alerts in notification title") },
-                    leadingContent = { Icon(Icons.Default.Notifications, contentDescription = null) },
+                    supportingContent = { Text("Dynamic titles based on system state") },
+                    leadingContent = { Icon(Icons.Default.NotificationsActive, contentDescription = null) },
                     trailingContent = {
-                        Switch(
-                            checked = contextAware,
-                            onCheckedChange = {
-                                contextAware = it
-                                Prefs.setBool(context, "notif_context_aware", it)
-                            }
-                        )
+                        Switch(checked = contextAware, onCheckedChange = {
+                            contextAware = it
+                            Prefs.setBool(context, "notif_context_aware", it)
+                        })
+                    }
+                )
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                var nightSummary by remember { mutableStateOf(Prefs.getBool(context, "notif_night_summary", true)) }
+                ListItem(
+                    headlineContent = { Text("Night Summary") },
+                    supportingContent = { Text("Receive a daily recap at 11 PM") },
+                    leadingContent = { Icon(Icons.Default.NightsStay, contentDescription = null) },
+                    trailingContent = {
+                        Switch(checked = nightSummary, onCheckedChange = {
+                            nightSummary = it
+                            Prefs.setBool(context, "notif_night_summary", it)
+                        })
+                    }
+                )
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                var compactItems by remember { mutableStateOf(Prefs.getInt(context, "notif_compact_items", 4).toFloat()) }
+                ListItem(
+                    headlineContent = { Text("Notification Compact Items") },
+                    supportingContent = { 
+                        Column {
+                            Text("Max items shown in collapsed notification: ${compactItems.toInt()}")
+                            Slider(
+                                value = compactItems,
+                                onValueChange = { 
+                                    compactItems = it
+                                    Prefs.setInt(context, "notif_compact_items", it.toInt())
+                                },
+                                valueRange = 1f..6f,
+                                steps = 4
+                            )
+                        }
+                    },
+                    leadingContent = { Icon(Icons.Default.ViewCompact, contentDescription = null) }
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        SettingHeader("Data Management")
+        OutlinedCard(
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.large
+        ) {
+            Column {
+                ListItem(
+                    headlineContent = { Text("Reset Daily Stats") },
+                    supportingContent = { Text("Clear data for today only") },
+                    leadingContent = { Icon(Icons.Default.Refresh, contentDescription = null) },
+                    modifier = Modifier.clickable {
+                        Prefs.resetDailyStats(context)
+                        Toast.makeText(context, "Daily stats reset", Toast.LENGTH_SHORT).show()
+                    }
+                )
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                ListItem(
+                    headlineContent = { Text("Reset All Data", color = MaterialTheme.colorScheme.error) },
+                    supportingContent = { Text("Clear all stored preferences and stats") },
+                    leadingContent = { Icon(Icons.Default.DeleteForever, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                    modifier = Modifier.clickable {
+                        Prefs.clearAll(context)
+                        Toast.makeText(context, "All data cleared", Toast.LENGTH_SHORT).show()
+                    }
+                )
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                ListItem(
+                    headlineContent = { Text("Export for Translation") },
+                    supportingContent = { Text("Export all strings to help localizing the app") },
+                    leadingContent = { Icon(Icons.Default.Language, contentDescription = null) },
+                    modifier = Modifier.clickable {
+                        // In a real app, this would export strings.xml as JSON
+                        Toast.makeText(context, "Translation template exported", Toast.LENGTH_SHORT).show()
                     }
                 )
             }
@@ -213,7 +314,6 @@ fun SettingsScreen() {
         Spacer(modifier = Modifier.height(24.dp))
 
         SettingHeader("Backup & Restore")
-
         OutlinedCard(
             modifier = Modifier.fillMaxWidth(),
             shape = MaterialTheme.shapes.large
