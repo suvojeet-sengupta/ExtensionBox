@@ -51,7 +51,7 @@ fun ExtensionsScreen() {
     ) {
         itemsIndexed((0 until ModuleRegistry.count()).toList()) { index, _ ->
             val key = ModuleRegistry.keyAt(index)
-            val emoji = ModuleRegistry.emojiAt(index)
+            val icon = ModuleRegistry.iconAt(index)
             val name = ModuleRegistry.nameAt(index)
             val desc = ModuleRegistry.descAt(index)
             val isEnabled = moduleStates[index]
@@ -75,9 +75,11 @@ fun ExtensionsScreen() {
                             ),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = emoji,
-                            style = MaterialTheme.typography.headlineSmall
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            modifier = Modifier.size(28.dp),
+                            tint = if (isEnabled.value) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
 

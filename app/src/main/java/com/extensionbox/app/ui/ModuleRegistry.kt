@@ -1,37 +1,53 @@
 package com.extensionbox.app.ui
 
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.*
+import androidx.compose.ui.graphics.vector.ImageVector
+
+data class ModuleDef(
+    val key: String,
+    val icon: ImageVector,
+    val emoji: String, // Fallback for widgets (RemoteViews)
+    val name: String,
+    val description: String,
+    val defaultEnabled: Boolean
+)
+
 object ModuleRegistry {
 
-    private val MODULES = arrayOf(
-        arrayOf("battery", "🔋", "Battery", "Current, power, temperature, health", "true"),
-        arrayOf("cpu_ram", "🧠", "CPU & RAM", "CPU usage, memory status", "true"),
-        arrayOf("screen", "📱", "Screen Time", "Screen on/off time, drain rates", "true"),
-        arrayOf("sleep", "😴", "Deep Sleep", "CPU sleep vs awake ratio", "true"),
-        arrayOf("network", "📶", "Network Speed", "Real-time download/upload speed", "true"),
-        arrayOf("data", "📊", "Data Usage", "Daily & monthly, WiFi & mobile", "true"),
-        arrayOf("unlock", "🔓", "Unlock Counter", "Daily unlocks, detox tracking", "true"),
-        arrayOf("storage", "💾", "Storage", "Internal storage usage", "false"),
-        arrayOf("connection", "📡", "Connection Info", "WiFi, cellular, VPN status", "false"),
-        arrayOf("uptime", "🕒", "Uptime", "Device uptime since boot", "false"),
-        arrayOf("steps", "👣", "Step Counter", "Steps and distance", "false"),
-        arrayOf("speedtest", "🏎", "Speed Test", "Periodic download/upload speed test", "false"),
-        arrayOf("fap", "🍆", "Fap Counter", "Self-monitoring counter & streak", "false")
+    private val MODULES = listOf(
+        ModuleDef("battery", Icons.Rounded.BatteryChargingFull, "🔋", "Battery", "Current, power, temperature, health", true),
+        ModuleDef("cpu_ram", Icons.Rounded.Memory, "🧠", "CPU & RAM", "CPU usage, memory status", true),
+        ModuleDef("screen", Icons.Rounded.Smartphone, "📱", "Screen Time", "Screen on/off time, drain rates", true),
+        ModuleDef("sleep", Icons.Rounded.Bedtime, "😴", "Deep Sleep", "CPU sleep vs awake ratio", true),
+        ModuleDef("network", Icons.Rounded.NetworkCheck, "📶", "Network Speed", "Real-time download/upload speed", true),
+        ModuleDef("data", Icons.Rounded.DataUsage, "📊", "Data Usage", "Daily & monthly, WiFi & mobile", true),
+        ModuleDef("unlock", Icons.Rounded.LockOpen, "🔓", "Unlock Counter", "Daily unlocks, detox tracking", true),
+        ModuleDef("storage", Icons.Rounded.Storage, "💾", "Storage", "Internal storage usage", false),
+        ModuleDef("connection", Icons.Rounded.SettingsInputAntenna, "📡", "Connection Info", "WiFi, cellular, VPN status", false),
+        ModuleDef("uptime", Icons.Rounded.History, "🕒", "Uptime", "Device uptime since boot", false),
+        ModuleDef("steps", Icons.Rounded.DirectionsWalk, "👣", "Step Counter", "Steps and distance", false),
+        ModuleDef("speedtest", Icons.Rounded.Speed, "🏎", "Speed Test", "Periodic download/upload speed test", false),
+        ModuleDef("fap", Icons.Rounded.Favorite, "🍆", "Fap Counter", "Self-monitoring counter & streak", false)
     )
 
-    fun keyAt(i: Int): String = MODULES[i][0]
-    fun emojiAt(i: Int): String = MODULES[i][1]
-    fun nameAt(i: Int): String = MODULES[i][2]
-    fun descAt(i: Int): String = MODULES[i][3]
-    fun defAt(i: Int): Boolean = "true" == MODULES[i][4]
+    fun keyAt(i: Int): String = MODULES[i].key
+    fun iconAt(i: Int): ImageVector = MODULES[i].icon
+    fun emojiAt(i: Int): String = MODULES[i].emoji
+    fun nameAt(i: Int): String = MODULES[i].name
+    fun descAt(i: Int): String = MODULES[i].description
+    fun defAt(i: Int): Boolean = MODULES[i].defaultEnabled
     fun count(): Int = MODULES.size
 
+    fun iconFor(key: String): ImageVector {
+        return MODULES.find { it.key == key }?.icon ?: Icons.Rounded.Extension
+    }
+
     fun emojiFor(key: String): String {
-        for (m in MODULES) if (m[0] == key) return m[1]
-        return "?"
+        return MODULES.find { it.key == key }?.emoji ?: "🧩"
     }
 
     fun nameFor(key: String): String {
-        for (m in MODULES) if (m[0] == key) return m[2]
-        return key
+        return MODULES.find { it.key == key }?.name ?: key
     }
 }

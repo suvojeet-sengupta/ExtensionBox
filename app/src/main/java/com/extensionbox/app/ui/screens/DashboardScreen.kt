@@ -243,7 +243,7 @@ fun DashCard(
     onExpandToggle: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val emoji = ModuleRegistry.emojiFor(key)
+    val icon = ModuleRegistry.iconFor(key)
     val name = ModuleRegistry.nameFor(key)
 
     AppCard(
@@ -264,7 +264,12 @@ fun DashCard(
                         .background(MaterialTheme.colorScheme.primaryContainer),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(text = emoji, style = MaterialTheme.typography.titleMedium)
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        modifier = Modifier.size(24.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
                 }
                 Spacer(modifier = Modifier.width(16.dp))
                 Text(
