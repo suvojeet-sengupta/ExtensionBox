@@ -6,14 +6,13 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
-import android.os.Handler
 import android.os.IBinder
-import android.os.Looper
 import android.os.SystemClock
 import android.text.TextUtils
 import androidx.core.app.NotificationCompat
 import com.extensionbox.app.modules.*
 import com.extensionbox.app.widgets.ModuleWidgetProvider
+import kotlinx.coroutines.*
 import java.util.Calendar
 import kotlin.math.abs
 
@@ -36,9 +35,11 @@ class MonitorService : Service() {
     private lateinit var sysAccess: SystemAccess
     private lateinit var modules: List<Module>
     private val lastTickTime = HashMap<String, Long>()
-    private lateinit var handler: Handler
-    private lateinit var tickRunnable: Runnable
     private var nightSummarySent = false
+
+    private val serviceJob = SupervisorJob()
+    private val serviceScope = CoroutineScope(Dispatchers.Main + serviceJob)
+    private var tickerJob: Job? = null
 
     fun getFapModule(): FapCounterModule? {
         return if (::modules.isInitialized) modules.filterIsInstance<FapCounterModule>().firstOrNull() else null
@@ -67,22 +68,28 @@ class MonitorService : Service() {
         )
 
         startForeground(NOTIF_ID, buildNotification())
-        syncModules()
-
-        handler = Handler(Looper.getMainLooper())
-        tickRunnable = Runnable {
-            doTickCycle()
-            scheduleNextTick()
+        
+        serviceScope.launch(Dispatchers.IO) {
+            syncModules()
+            startTicker()
         }
-        scheduleNextTick()
+        
         Prefs.setRunning(this, true)
+    }
+
+    private fun startTicker() {
+        tickerJob?.cancel()
+        tickerJob = serviceScope.launch(Dispatchers.IO) {
+            while (isActive) {
+                doTickCycle()
+                val delayMs = calculateNextDelay()
+                delay(delayMs)
+            }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
-            stopAll()
-            Prefs.setRunning(this, false)
-            stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
             return START_NOT_STICKY
         }
@@ -90,8 +97,15 @@ class MonitorService : Service() {
     }
 
     override fun onDestroy() {
-        stopAll()
-        if (::handler.isInitialized) handler.removeCallbacksAndMessages(null)
+        tickerJob?.cancel()
+        serviceJob.cancel()
+        
+        runBlocking {
+            withContext(Dispatchers.IO) {
+                stopAll()
+            }
+        }
+        
         Prefs.setRunning(this, false)
         moduleData.clear()
         instance = null
@@ -100,12 +114,12 @@ class MonitorService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    private fun syncModules() {
-        if (!::modules.isInitialized) return
+    private suspend fun syncModules() = withContext(Dispatchers.IO) {
+        if (!::modules.isInitialized) return@withContext
         for (m in modules) {
-            val shouldRun = Prefs.isModuleEnabled(this, m.key(), m.defaultEnabled())
+            val shouldRun = Prefs.isModuleEnabled(this@MonitorService, m.key(), m.defaultEnabled())
             if (shouldRun && !m.alive()) {
-                m.start(this, sysAccess)
+                m.start(this@MonitorService, sysAccess)
                 lastTickTime[m.key()] = 0L
             } else if (!shouldRun && m.alive()) {
                 m.stop()
@@ -115,7 +129,7 @@ class MonitorService : Service() {
         }
     }
 
-    private fun doTickCycle() {
+    private suspend fun doTickCycle() = withContext(Dispatchers.IO) {
         checkRollover()
         syncModules()
         val now = SystemClock.elapsedRealtime()
@@ -127,7 +141,7 @@ class MonitorService : Service() {
                 val last = lastTickTime[m.key()] ?: 0L
                 if (now - last >= m.tickIntervalMs()) {
                     m.tick()
-                    m.checkAlerts(this)
+                    m.checkAlerts(this@MonitorService)
                     lastTickTime[m.key()] = now
                     moduleData[m.key()] = m.dataPoints()
                     changed = true
@@ -135,9 +149,11 @@ class MonitorService : Service() {
             }
         }
         if (changed) {
-            updateNotification()
+            withContext(Dispatchers.Main) {
+                updateNotification()
+            }
             try {
-                ModuleWidgetProvider.updateAllWidgets(this)
+                ModuleWidgetProvider.updateAllWidgets(this@MonitorService)
             } catch (ignored: Exception) {
             }
         }
@@ -194,11 +210,8 @@ class MonitorService : Service() {
         Prefs.setLong(this, "dat_monthly_mobile", 0L)
     }
 
-    private fun scheduleNextTick() {
-        if (!::modules.isInitialized) {
-            if (::handler.isInitialized) handler.postDelayed(tickRunnable, 5000L)
-            return
-        }
+    private fun calculateNextDelay(): Long {
+        if (!::modules.isInitialized) return 5000L
         val now = SystemClock.elapsedRealtime()
         var minDelay = Long.MAX_VALUE
         for (m in modules) {
@@ -207,13 +220,12 @@ class MonitorService : Service() {
             val delay = (last + m.tickIntervalMs()) - now
             if (delay < minDelay) minDelay = delay
         }
-        val delay = when {
+        return when {
             minDelay == Long.MAX_VALUE -> 5000L
-            minDelay < 1000L -> 1000L
+            minDelay < 500L -> 500L
             minDelay > 60000L -> 60000L
             else -> minDelay
         }
-        if (::handler.isInitialized) handler.postDelayed(tickRunnable, delay)
     }
 
     private fun stopAll() {
@@ -284,7 +296,6 @@ class MonitorService : Service() {
 
         var base = parts.joinToString(" • ")
         if (base.length > 60 && parts.size > 1) {
-            // If too long, try to show fewer items or truncate
             base = parts.take(parts.size - 1).joinToString(" • ") + " ..."
         }
 
@@ -304,13 +315,11 @@ class MonitorService : Service() {
         val alive = getAliveModulesSorted()
         
         val allLines = if (compactStyle) {
-            // Compact style: use compact strings but in a list
             alive.mapNotNull { m -> 
                 val c = m.compact()
                 if (c.isNotEmpty()) "• ${m.name()}: $c" else null 
             }
         } else {
-            // Detailed style: use m.detail()
             alive.mapNotNull { m -> m.detail().takeIf { it.isNotEmpty() } }
         }
         
@@ -367,7 +376,7 @@ class MonitorService : Service() {
         body.append("📱 Screen: ${screenH}h ${screenM}m")
         body.append("  •  🔓 $unlocks unlocks")
         if (steps > 0) body.append("  •  👣 $steps steps")
-        if (faps > 0) body.append("  •  🍆 $faps")
+        if (faps > 0) body.append("  •  Favorite $faps") // Registration says Favorite emoji
 
         val ydUnlocks = Prefs.getInt(this, "ulk_yesterday", 0)
         if (ydUnlocks > 0) {
