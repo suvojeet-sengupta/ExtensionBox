@@ -1,24 +1,32 @@
 package com.extensionbox.app.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.scale
 import com.extensionbox.app.Prefs
 import com.extensionbox.app.ui.ModuleRegistry
-
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import com.extensionbox.app.ui.components.AppCard
+import com.extensionbox.app.MonitorService
 
 @Composable
 fun ExtensionsScreen() {
@@ -39,7 +47,7 @@ fun ExtensionsScreen() {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         itemsIndexed((0 until ModuleRegistry.count()).toList()) { index, _ ->
             val key = ModuleRegistry.keyAt(index)
@@ -49,94 +57,100 @@ fun ExtensionsScreen() {
             val isEnabled = moduleStates[index]
             val isExpanded = expandedStates[key] ?: false
 
-            OutlinedCard(
-                modifier = Modifier.fillMaxWidth(),
-                shape = MaterialTheme.shapes.large,
-                onClick = {
-                    expandedStates[key] = !isExpanded
-                }
+            AppCard(
+                onClick = { expandedStates[key] = !isExpanded },
+                containerColor = if (isEnabled.value) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceContainerLow
             ) {
-                Column {
-                    ListItem(
-                        headlineContent = {
-                            Text(
-                                text = name,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (isEnabled.value) MaterialTheme.colorScheme.primaryContainer 
+                                else MaterialTheme.colorScheme.surfaceVariant
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = emoji,
+                            style = MaterialTheme.typography.headlineSmall
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(16.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = name,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (isEnabled.value) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                        Text(
+                            text = desc,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    Switch(
+                        checked = isEnabled.value,
+                        onCheckedChange = {
+                            isEnabled.value = it
+                            Prefs.setModuleEnabled(context, key, it)
                         },
-                        supportingContent = {
-                            Text(
-                                text = desc,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
-                            )
-                        },
-                        leadingContent = {
-                            Surface(
-                                shape = MaterialTheme.shapes.medium,
-                                color = if (isEnabled.value) MaterialTheme.colorScheme.primaryContainer 
-                                        else MaterialTheme.colorScheme.surfaceVariant,
-                                modifier = Modifier.size(48.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Text(
-                                        text = emoji,
-                                        style = MaterialTheme.typography.headlineSmall
-                                    )
-                                }
-                            }
-                        },
-                        trailingContent = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                if (isExpanded) {
-                                    Icon(
-                                        imageVector = Icons.Default.Settings,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(20.dp).padding(end = 8.dp)
-                                    )
-                                }
-                                Switch(
-                                    checked = isEnabled.value,
-                                    onCheckedChange = {
-                                        isEnabled.value = it
-                                        Prefs.setModuleEnabled(context, key, it)
-                                    },
-                                    thumbContent = if (isEnabled.value) {
-                                        {
-                                            Icon(
-                                                imageVector = Icons.Default.Check,
-                                                contentDescription = null,
-                                                modifier = Modifier.size(SwitchDefaults.IconSize)
-                                            )
-                                        }
-                                    } else null
+                        thumbContent = if (isEnabled.value) {
+                            {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(SwitchDefaults.IconSize)
                                 )
                             }
-                        },
-                        colors = ListItemDefaults.colors(
-                            containerColor = androidx.compose.ui.graphics.Color.Transparent
-                        )
+                        } else null
                     )
+                }
 
-                    AnimatedVisibility(
-                        visible = isExpanded,
-                        enter = expandVertically(),
-                        exit = shrinkVertically()
+                AnimatedVisibility(
+                    visible = isExpanded,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .padding(top = 16.dp)
+                            .fillMaxWidth()
                     ) {
-                        Column(
-                            modifier = Modifier
-                                .padding(start = 16.dp, end = 16.dp, bottom = 16.dp)
-                                .fillMaxWidth()
-                        ) {
-                            HorizontalDivider(modifier = Modifier.padding(bottom = 16.dp))
-                            ModuleSettings(key, context)
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Configuration",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary
+                            )
                         }
+                        
+                        Spacer(modifier = Modifier.height(16.dp))
+                        ModuleSettings(key, context)
                     }
                 }
             }
         }
+        
+        item { Spacer(modifier = Modifier.height(80.dp)) }
     }
 }
 
@@ -317,7 +331,7 @@ fun ModuleSettings(key: String, context: android.content.Context) {
                 
                 Button(
                     onClick = {
-                        com.extensionbox.app.MonitorService.getInstance()?.getFapModule()?.increment()
+                        MonitorService.getInstance()?.getFapModule()?.increment()
                     },
                     modifier = Modifier.fillMaxWidth(),
                     shape = MaterialTheme.shapes.medium

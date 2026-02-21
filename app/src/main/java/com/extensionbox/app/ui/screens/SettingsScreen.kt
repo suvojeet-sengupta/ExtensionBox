@@ -1,41 +1,42 @@
 package com.extensionbox.app.ui.screens
 
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
-import com.extensionbox.app.Prefs
-import com.extensionbox.app.ThemeHelper
-
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.PowerManager
+import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import org.json.JSONObject
-import java.io.BufferedReader
-import java.io.InputStreamReader
-import rikka.shizuku.Shizuku
-import android.content.pm.PackageManager
-
+import androidx.compose.animation.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
-
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.foundation.clickable
-
-import android.os.PowerManager
-import android.provider.Settings
-import android.net.Uri
-import android.content.Intent
-import com.extensionbox.app.SystemAccess
-
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import androidx.compose.ui.platform.LocalLifecycleOwner
+import com.extensionbox.app.Prefs
+import com.extensionbox.app.SystemAccess
+import com.extensionbox.app.ThemeHelper
+import com.extensionbox.app.ui.components.AppCard
+import org.json.JSONObject
+import rikka.shizuku.Shizuku
+import java.io.BufferedReader
+import java.io.InputStreamReader
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -65,7 +66,6 @@ fun SettingsScreen() {
                     isShizukuRunning && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
                 } catch (e: Exception) { false }
                 
-                // MT Manager-like auto request
                 if (isShizukuRunning && !shizukuPermissionGranted) {
                     try {
                         Shizuku.requestPermission(1001)
@@ -100,21 +100,18 @@ fun SettingsScreen() {
 
     val sysAccess = remember(shizukuPermissionGranted) { SystemAccess(context) }
 
-    // Export/Import Launchers
+    // Launchers
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         uri?.let {
             try {
                 val jsonObject = JSONObject()
-                val allPrefs = Prefs.getAll(context)
-                for ((key, value) in allPrefs) {
-                    jsonObject.put(key, value)
-                }
+                Prefs.getAll(context).forEach { (k, v) -> jsonObject.put(k, v) }
                 context.contentResolver.openOutputStream(it)?.use { os ->
                     os.write(jsonObject.toString(4).toByteArray())
                 }
-                Toast.makeText(context, "Settings exported successfully", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Settings exported", Toast.LENGTH_SHORT).show()
             } catch (e: Exception) {
-                Toast.makeText(context, "Export failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Export failed", Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -123,13 +120,12 @@ fun SettingsScreen() {
         uri?.let {
             try {
                 context.contentResolver.openInputStream(it)?.use { `is` ->
-                    val reader = BufferedReader(InputStreamReader(`is`))
-                    val json = reader.readText()
+                    val json = BufferedReader(InputStreamReader(`is`)).readText()
                     Prefs.importJson(context, json)
-                    Toast.makeText(context, "Settings imported successfully", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "Settings imported", Toast.LENGTH_SHORT).show()
                 }
             } catch (e: Exception) {
-                Toast.makeText(context, "Import failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Import failed", Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -138,304 +134,271 @@ fun SettingsScreen() {
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(scrollState)
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
-        SettingHeader("Permissions")
-        OutlinedCard(
-            modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.large
-        ) {
-            Column {
-                ListItem(
-                    headlineContent = { Text("Permission Tier") },
-                    supportingContent = { Text("Current mode: ${sysAccess.tier}") },
-                    leadingContent = { Icon(Icons.Default.Security, contentDescription = null) },
-                    trailingContent = {
-                        val color = when(sysAccess.tier) {
-                            "Root" -> MaterialTheme.colorScheme.primary
-                            "Shizuku" -> MaterialTheme.colorScheme.secondary
-                            else -> MaterialTheme.colorScheme.outline
-                        }
-                        AssistChip(onClick = {}, label = { Text(sysAccess.tier) }, 
-                            colors = AssistChipDefaults.assistChipColors(labelColor = color))
+        // --- Permissions Section ---
+        SettingsGroup(title = "Permissions", icon = Icons.Default.Security) {
+            AppCard {
+                SettingsItem(
+                    title = "System Tier",
+                    summary = "Running in ${sysAccess.tier} mode",
+                    icon = Icons.Default.AdminPanelSettings,
+                    trailing = {
+                        AssistChip(
+                            onClick = {},
+                            label = { Text(sysAccess.tier) },
+                            colors = AssistChipDefaults.assistChipColors(
+                                labelColor = if (sysAccess.isEnhanced()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                            )
+                        )
                     }
                 )
-                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                
-                // Shizuku Specific Settings
-                ListItem(
-                    headlineContent = { Text("Shizuku Support") },
-                    supportingContent = { 
-                        Text(if (isShizukuRunning) "Service is running" else "Service not found or stopped")
-                    },
-                    leadingContent = { 
-                        Icon(
-                            imageVector = Icons.Default.Terminal, 
-                            contentDescription = null,
-                            tint = if (isShizukuRunning) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
-                        ) 
-                    },
-                    trailingContent = {
-                        TextButton(onClick = {
-                            try {
-                                val intent = context.packageManager.getLaunchIntentForPackage("moe.shizuku.privileged.api")
-                                if (intent != null) context.startActivity(intent)
-                                else Toast.makeText(context, "Shizuku app not found", Toast.LENGTH_SHORT).show()
-                            } catch (e: Exception) {
-                                Toast.makeText(context, "Error opening Shizuku", Toast.LENGTH_SHORT).show()
-                            }
-                        }) {
-                            Text("Open App")
-                        }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant)
+
+                SettingsItem(
+                    title = "Shizuku Service",
+                    summary = if (isShizukuRunning) "Service is active" else "Service not found",
+                    icon = Icons.Default.Terminal,
+                    onClick = {
+                        try {
+                            val intent = context.packageManager.getLaunchIntentForPackage("moe.shizuku.privileged.api")
+                            if (intent != null) context.startActivity(intent)
+                            else Toast.makeText(context, "Shizuku not found", Toast.LENGTH_SHORT).show()
+                        } catch (e: Exception) { /* ignore */ }
                     }
                 )
-                
+
                 if (isShizukuRunning && !shizukuPermissionGranted) {
-                    ListItem(
-                        headlineContent = { Text("Grant Shizuku Permission") },
-                        supportingContent = { Text("Allow Extension Box to use Shizuku") },
-                        leadingContent = { Icon(Icons.Default.VpnKey, contentDescription = null) },
-                        modifier = Modifier.clickable {
-                            try {
-                                Shizuku.requestPermission(1001)
-                            } catch (e: Exception) {
-                                Toast.makeText(context, "Request failed", Toast.LENGTH_SHORT).show()
-                            }
-                        }
+                    SettingsItem(
+                        title = "Grant Permission",
+                        summary = "Allow system file access via Shizuku",
+                        icon = Icons.Default.VpnKey,
+                        onClick = { Shizuku.requestPermission(1001) }
                     )
                 }
 
-                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                ListItem(
-                    headlineContent = { Text("Battery Exemption") },
-                    supportingContent = { Text("Disable optimizations to prevent background kills") },
-                    leadingContent = { Icon(Icons.Default.BatteryChargingFull, contentDescription = null) },
-                    modifier = Modifier.clickable {
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant)
+
+                SettingsItem(
+                    title = "Battery Optimization",
+                    summary = "Allow background monitoring",
+                    icon = Icons.Default.BatterySaver,
+                    onClick = {
                         try {
                             val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
                                 data = Uri.parse("package:${context.packageName}")
                             }
                             context.startActivity(intent)
                         } catch (e: Exception) {
-                            val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
-                            context.startActivity(intent)
+                            context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
                         }
                     }
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
-
-        SettingHeader("Appearance")
-        OutlinedCard(
-            modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.large
-        ) {
-            ListItem(
-                headlineContent = { Text("App Theme") },
-                supportingContent = { Text(ThemeHelper.NAMES[themeIndex.coerceIn(0, ThemeHelper.NAMES.size - 1)]) },
-                leadingContent = { Icon(Icons.Default.Palette, contentDescription = null) },
-                trailingContent = {
-                    Box {
-                        TextButton(onClick = { expanded = true }) {
-                            Text("Change")
-                        }
-                        DropdownMenu(
-                            expanded = expanded,
-                            onDismissRequest = { expanded = false }
-                        ) {
-                            ThemeHelper.NAMES.forEachIndexed { index, name ->
-                                DropdownMenuItem(
-                                    text = { Text(name) },
-                                    onClick = {
-                                        themeIndex = index
-                                        Prefs.setInt(context, "app_theme", index)
-                                        expanded = false
-                                        Toast.makeText(context, "Theme saved. Restart app to apply fully.", Toast.LENGTH_SHORT).show()
-                                    }
-                                )
+        // --- Appearance Section ---
+        SettingsGroup(title = "Appearance", icon = Icons.Default.Palette) {
+            AppCard {
+                SettingsItem(
+                    title = "App Theme",
+                    summary = ThemeHelper.NAMES[themeIndex.coerceIn(0, ThemeHelper.NAMES.size - 1)],
+                    icon = Icons.Default.ColorLens,
+                    onClick = { expanded = true }
+                )
+                
+                DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                    ThemeHelper.NAMES.forEachIndexed { index, name ->
+                        DropdownMenuItem(
+                            text = { Text(name) },
+                            onClick = {
+                                themeIndex = index
+                                Prefs.setInt(context, "app_theme", index)
+                                expanded = false
                             }
-                        }
+                        )
                     }
                 }
-            )
-        }
 
-        Spacer(modifier = Modifier.height(24.dp))
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant)
 
-        SettingHeader("Monitoring")
-        OutlinedCard(
-            modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.large
-        ) {
-            Column {
                 var expandCards by remember { mutableStateOf(Prefs.getBool(context, "dash_expand_cards", true)) }
-                ListItem(
-                    headlineContent = { Text("Expandable Cards") },
-                    supportingContent = { Text("Allow cards to be expanded on the dashboard") },
-                    leadingContent = { Icon(Icons.Default.ViewAgenda, contentDescription = null) },
-                    trailingContent = {
-                        Switch(checked = expandCards, onCheckedChange = {
-                            expandCards = it
-                            Prefs.setBool(context, "dash_expand_cards", it)
-                        })
+                SettingsToggle(
+                    title = "Expandable Cards",
+                    summary = "Show expansion toggle on dashboard",
+                    icon = Icons.Default.ViewStream,
+                    checked = expandCards,
+                    onCheckedChange = {
+                        expandCards = it
+                        Prefs.setBool(context, "dash_expand_cards", it)
                     }
                 )
-                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                var notifAll by remember { mutableStateOf(Prefs.getBool(context, "notif_show_all", false)) }
-                ListItem(
-                    headlineContent = { Text("Show All in Notification") },
-                    supportingContent = { Text("Show all enabled extensions in expanded view") },
-                    leadingContent = { Icon(Icons.Default.ListAlt, contentDescription = null) },
-                    trailingContent = {
-                        Switch(checked = notifAll, onCheckedChange = {
-                            notifAll = it
-                            Prefs.setBool(context, "notif_show_all", it)
-                        })
-                    }
-                )
-                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                var notifCompact by remember { mutableStateOf(Prefs.getBool(context, "notif_compact_style", true)) }
-                ListItem(
-                    headlineContent = { Text("Compact Notification Style") },
-                    supportingContent = { Text("Use simplified bulleted list in expanded view") },
-                    leadingContent = { Icon(Icons.Default.Dehaze, contentDescription = null) },
-                    trailingContent = {
-                        Switch(checked = notifCompact, onCheckedChange = {
-                            notifCompact = it
-                            Prefs.setBool(context, "notif_compact_style", it)
-                        })
-                    }
-                )
-                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+            }
+        }
+
+        // --- Monitoring Section ---
+        SettingsGroup(title = "Monitoring", icon = Icons.Default.Analytics) {
+            AppCard {
                 var contextAware by remember { mutableStateOf(Prefs.getBool(context, "notif_context_aware", true)) }
-                ListItem(
-                    headlineContent = { Text("Context Aware Notification") },
-                    supportingContent = { Text("Dynamic titles based on system state") },
-                    leadingContent = { Icon(Icons.Default.NotificationsActive, contentDescription = null) },
-                    trailingContent = {
-                        Switch(checked = contextAware, onCheckedChange = {
-                            contextAware = it
-                            Prefs.setBool(context, "notif_context_aware", it)
-                        })
+                SettingsToggle(
+                    title = "Context Aware",
+                    summary = "Dynamic titles based on battery",
+                    icon = Icons.Default.NotificationAdd,
+                    checked = contextAware,
+                    onCheckedChange = {
+                        contextAware = it
+                        Prefs.setBool(context, "notif_context_aware", it)
                     }
                 )
-                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                var nightSummary by remember { mutableStateOf(Prefs.getBool(context, "notif_night_summary", true)) }
-                ListItem(
-                    headlineContent = { Text("Night Summary") },
-                    supportingContent = { Text("Receive a daily recap at 11 PM") },
-                    leadingContent = { Icon(Icons.Default.NightsStay, contentDescription = null) },
-                    trailingContent = {
-                        Switch(checked = nightSummary, onCheckedChange = {
-                            nightSummary = it
-                            Prefs.setBool(context, "notif_night_summary", it)
-                        })
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant)
+
+                var notifCompact by remember { mutableStateOf(Prefs.getBool(context, "notif_compact_style", true)) }
+                SettingsToggle(
+                    title = "Compact Style",
+                    summary = "Simplified list in notification",
+                    icon = Icons.Default.Compress,
+                    checked = notifCompact,
+                    onCheckedChange = {
+                        notifCompact = it
+                        Prefs.setBool(context, "notif_compact_style", it)
                     }
                 )
-                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant)
+
                 var compactItems by remember { mutableStateOf(Prefs.getInt(context, "notif_compact_items", 4).toFloat()) }
-                ListItem(
-                    headlineContent = { Text("Notification Compact Items") },
-                    supportingContent = { 
-                        Column {
-                            Text("Max items shown in collapsed notification: ${compactItems.toInt()}")
-                            Slider(
-                                value = compactItems,
-                                onValueChange = { 
-                                    compactItems = it
-                                    Prefs.setInt(context, "notif_compact_items", it.toInt())
-                                },
-                                valueRange = 1f..6f,
-                                steps = 4
-                            )
-                        }
-                    },
-                    leadingContent = { Icon(Icons.Default.ViewCompact, contentDescription = null) }
-                )
+                Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                    Text(
+                        text = "Notification Items: ${compactItems.toInt()}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Slider(
+                        value = compactItems,
+                        onValueChange = { 
+                            compactItems = it
+                            Prefs.setInt(context, "notif_compact_items", it.toInt())
+                        },
+                        valueRange = 1f..6f,
+                        steps = 4
+                    )
+                }
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
-
-        SettingHeader("Data Management")
-        OutlinedCard(
-            modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.large
-        ) {
-            Column {
-                ListItem(
-                    headlineContent = { Text("Reset Daily Stats") },
-                    supportingContent = { Text("Clear data for today only") },
-                    leadingContent = { Icon(Icons.Default.Refresh, contentDescription = null) },
-                    modifier = Modifier.clickable {
-                        Prefs.resetDailyStats(context)
-                        Toast.makeText(context, "Daily stats reset", Toast.LENGTH_SHORT).show()
-                    }
+        // --- Data Section ---
+        SettingsGroup(title = "Data & Backup", icon = Icons.Default.Storage) {
+            AppCard {
+                SettingsItem(
+                    title = "Export Settings",
+                    summary = "Save config to JSON",
+                    icon = Icons.Default.UploadFile,
+                    onClick = { exportLauncher.launch("extensionbox_config.json") }
                 )
-                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                ListItem(
-                    headlineContent = { Text("Reset All Data", color = MaterialTheme.colorScheme.error) },
-                    supportingContent = { Text("Clear all stored preferences and stats") },
-                    leadingContent = { Icon(Icons.Default.DeleteForever, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
-                    modifier = Modifier.clickable {
+                SettingsItem(
+                    title = "Import Settings",
+                    summary = "Restore from JSON",
+                    icon = Icons.Default.FileDownload,
+                    onClick = { importLauncher.launch(arrayOf("application/json")) }
+                )
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant)
+
+                SettingsItem(
+                    title = "Reset All Data",
+                    summary = "Clear all stats and preferences",
+                    icon = Icons.Default.DeleteSweep,
+                    color = MaterialTheme.colorScheme.error,
+                    onClick = {
                         Prefs.clearAll(context)
-                        Toast.makeText(context, "All data cleared", Toast.LENGTH_SHORT).show()
-                    }
-                )
-                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                ListItem(
-                    headlineContent = { Text("Export for Translation") },
-                    supportingContent = { Text("Export all strings to help localizing the app") },
-                    leadingContent = { Icon(Icons.Default.Language, contentDescription = null) },
-                    modifier = Modifier.clickable {
-                        // In a real app, this would export strings.xml as JSON
-                        Toast.makeText(context, "Translation template exported", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Data cleared", Toast.LENGTH_SHORT).show()
                     }
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
-
-        SettingHeader("Backup & Restore")
-        OutlinedCard(
-            modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.large
-        ) {
-            Column {
-                ListItem(
-                    headlineContent = { Text("Export Settings") },
-                    supportingContent = { Text("Save configuration to a JSON file") },
-                    leadingContent = { Icon(Icons.Default.Upload, contentDescription = null) },
-                    modifier = Modifier.clickable {
-                        exportLauncher.launch("extensionbox_settings.json")
-                    }
-                )
-                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                ListItem(
-                    headlineContent = { Text("Import Settings") },
-                    supportingContent = { Text("Restore configuration from JSON") },
-                    leadingContent = { Icon(Icons.Default.Download, contentDescription = null) },
-                    modifier = Modifier.clickable {
-                        importLauncher.launch(arrayOf("application/json"))
-                    }
-                )
-            }
-        }
-        
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(100.dp))
     }
 }
 
 @Composable
-fun SettingHeader(title: String) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.labelLarge,
-        fontWeight = FontWeight.Bold,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp)
+fun SettingsGroup(title: String, icon: ImageVector, content: @Composable ColumnScope.() -> Unit) {
+    Column {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold
+            )
+        }
+        content()
+    }
+}
+
+@Composable
+fun SettingsItem(
+    title: String,
+    summary: String,
+    icon: ImageVector,
+    color: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onSurface,
+    trailing: @Composable (() -> Unit)? = null,
+    onClick: (() -> Unit)? = null
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = onClick != null) { onClick?.invoke() }
+            .padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(icon, null, modifier = Modifier.size(20.dp), tint = color)
+        }
+        Spacer(Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleMedium, color = color, fontWeight = FontWeight.SemiBold)
+            Text(summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        if (trailing != null) {
+            trailing()
+        }
+    }
+}
+
+@Composable
+fun SettingsToggle(
+    title: String,
+    summary: String,
+    icon: ImageVector,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    SettingsItem(
+        title = title,
+        summary = summary,
+        icon = icon,
+        trailing = {
+            Switch(checked = checked, onCheckedChange = onCheckedChange)
+        }
     )
 }

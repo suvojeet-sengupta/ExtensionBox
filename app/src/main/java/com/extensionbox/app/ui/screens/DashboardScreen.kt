@@ -4,11 +4,13 @@ import android.content.Intent
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
@@ -18,11 +20,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.asComposePath
-import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -31,18 +32,12 @@ import androidx.core.content.ContextCompat
 import com.extensionbox.app.MonitorService
 import com.extensionbox.app.Prefs
 import com.extensionbox.app.ui.ModuleRegistry
+import com.extensionbox.app.ui.components.AppCard
 import kotlinx.coroutines.delay
 
 // Reorderable 3.0.0 imports
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
-
-// Graphics Shapes 1.0.1 imports
-import androidx.graphics.shapes.CornerRounding
-import androidx.graphics.shapes.Morph
-import androidx.graphics.shapes.RoundedPolygon
-import androidx.graphics.shapes.star
-import androidx.graphics.shapes.toPath
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -106,19 +101,19 @@ fun DashboardScreen() {
         state = lazyListState,
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item(key = "status_header") {
-            StatusHeader(isRunning, activeCount, context) { isRunning = it }
+            StatusHero(isRunning, activeCount, context) { isRunning = it }
         }
 
         if (!isRunning) {
             item {
                 Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
                     Text(
-                        text = "Tap start to begin monitoring system resources.",
+                        text = "Monitoring is stopped.\nTap start to begin.",
                         style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.outline,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center
                     )
                 }
@@ -135,7 +130,7 @@ fun DashboardScreen() {
                 if (data != null) {
                     ReorderableItem(reorderableState, key = key) { isDragging ->
                         val elevation by animateDpAsState(if (isDragging) 8.dp else 0.dp, label = "elevation")
-                        val scale by animateFloatAsState(if (isDragging) 1.05f else 1.0f, label = "scale")
+                        val scale by animateFloatAsState(if (isDragging) 1.02f else 1.0f, label = "scale")
 
                         Box(
                             modifier = Modifier
@@ -166,56 +161,53 @@ fun DashboardScreen() {
 }
 
 @Composable
-fun StatusHeader(isRunning: Boolean, activeCount: Int, context: android.content.Context, onStatusChange: (Boolean) -> Unit) {
-    val infiniteTransition = rememberInfiniteTransition(label = "status_morph")
-    val morphProgress by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(3000, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "progress"
-    )
+fun StatusHero(isRunning: Boolean, activeCount: Int, context: android.content.Context, onStatusChange: (Boolean) -> Unit) {
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val errorColor = MaterialTheme.colorScheme.error
+    
+    val targetColor = if (isRunning) primaryColor else errorColor
+    val containerColor by animateColorAsState(targetValue = targetColor, label = "hero_bg")
 
-    ElevatedCard(
+    Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.elevatedCardColors(
-            containerColor = if (isRunning) MaterialTheme.colorScheme.primaryContainer 
-                            else MaterialTheme.colorScheme.errorContainer
-        )
+        shape = MaterialTheme.shapes.extraLarge,
+        color = containerColor,
+        contentColor = MaterialTheme.colorScheme.onPrimary
     ) {
         Box {
-            MorphingBackground(
-                progress = morphProgress,
-                color = if (isRunning) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
-                        else MaterialTheme.colorScheme.error.copy(alpha = 0.1f)
+            // Subtle gradient overlay
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(Color.White.copy(alpha = 0.1f), Color.Transparent)
+                        )
+                    )
             )
 
             Row(
-                modifier = Modifier.padding(20.dp),
+                modifier = Modifier.padding(24.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    val statusText = if (isRunning) "Active" else "Stopped"
+                    AnimatedContent(targetState = isRunning, label = "status_text") { running ->
+                        Text(
+                            text = if (running) "Active" else "Stopped",
+                            style = MaterialTheme.typography.displaySmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Spacer(Modifier.height(4.dp))
                     Text(
-                        text = statusText,
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = if (isRunning) MaterialTheme.colorScheme.onPrimaryContainer 
-                                else MaterialTheme.colorScheme.onErrorContainer
-                    )
-                    Text(
-                        text = if (isRunning) "$activeCount extensions running" else "Service is idle",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = if (isRunning) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                                else MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.7f)
+                        text = if (isRunning) "$activeCount modules running" else "Service is idle",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f)
                     )
                 }
 
-                Button(
+                FilledIconButton(
                     onClick = {
                         if (isRunning) {
                             val intent = Intent(context, MonitorService::class.java).setAction(MonitorService.ACTION_STOP)
@@ -226,53 +218,20 @@ fun StatusHeader(isRunning: Boolean, activeCount: Int, context: android.content.
                         }
                         onStatusChange(!isRunning)
                     },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (isRunning) MaterialTheme.colorScheme.error 
-                                        else MaterialTheme.colorScheme.primary
-                    ),
-                    shape = MaterialTheme.shapes.medium
+                    modifier = Modifier.size(56.dp),
+                    colors = IconButtonDefaults.filledIconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        contentColor = targetColor
+                    )
                 ) {
                     Icon(
                         imageVector = if (isRunning) Icons.Default.Stop else Icons.Default.PlayArrow,
-                        contentDescription = null
+                        contentDescription = null,
+                        modifier = Modifier.size(28.dp)
                     )
-                    Spacer(Modifier.width(8.dp))
-                    Text(if (isRunning) "Stop" else "Start")
                 }
             }
         }
-    }
-}
-
-@Composable
-fun MorphingBackground(progress: Float, color: Color) {
-    val shapeA = remember<RoundedPolygon> {
-        RoundedPolygon(
-            numVertices = 6,
-            rounding = CornerRounding(0.2f)
-        )
-    }
-    val shapeB = remember<RoundedPolygon> {
-        RoundedPolygon.star(
-            numVerticesPerRadius = 6,
-            innerRadius = 0.7f,
-            rounding = CornerRounding(0.1f)
-        )
-    }
-    val morph = remember { Morph(shapeA, shapeB) }
-    val androidPath = remember { android.graphics.Path() }
-
-    androidx.compose.foundation.Canvas(
-        modifier = Modifier.fillMaxSize().offset(x = 100.dp, y = (-20).dp)
-    ) {
-        val matrix = android.graphics.Matrix()
-        matrix.setScale(size.minDimension / 1.5f, size.minDimension / 1.5f)
-        
-        androidPath.rewind()
-        morph.toPath(progress, androidPath)
-        androidPath.transform(matrix)
-        
-        drawPath(androidPath.asComposePath(), color, style = Fill)
     }
 }
 
@@ -287,80 +246,81 @@ fun DashCard(
     val emoji = ModuleRegistry.emojiFor(key)
     val name = ModuleRegistry.nameFor(key)
 
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .animateContentSize(animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow))
-            .clickable { onExpandToggle() },
-        shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
-        )
+    AppCard(
+        modifier = modifier,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        onClick = onExpandToggle
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Surface(
-                        shape = MaterialTheme.shapes.medium,
-                        color = MaterialTheme.colorScheme.secondaryContainer,
-                        modifier = Modifier.size(40.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text(text = emoji, style = MaterialTheme.typography.headlineSmall)
-                        }
-                    }
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Text(
-                        text = name,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primaryContainer),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(text = emoji, style = MaterialTheme.typography.titleMedium)
                 }
-                
-                Icon(
-                    imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.outline
+                Spacer(modifier = Modifier.width(16.dp))
+                Text(
+                    text = name,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
                 )
             }
+            
+            Icon(
+                imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
 
-            if (isExpanded) {
-                Spacer(modifier = Modifier.height(16.dp))
-                HorizontalDivider(modifier = Modifier.alpha(0.3f))
+        AnimatedVisibility(
+            visible = isExpanded,
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut()
+        ) {
+            Column(modifier = Modifier.padding(top = 16.dp)) {
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 Spacer(modifier = Modifier.height(12.dp))
                 
                 data.forEach { (rawKey, value) ->
                     val labelText = rawKey.substringAfterLast('.').replaceFirstChar { it.uppercase() }.replace("_", " ")
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
                             text = labelText,
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.secondary
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
                             text = value,
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     }
                 }
-            } else {
-                val summary = data.values.take(2).joinToString(" • ")
-                Text(
-                    text = summary,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.secondary,
-                    modifier = Modifier.padding(top = 12.dp, start = 56.dp)
-                )
             }
+        }
+
+        if (!isExpanded) {
+            val summary = data.values.take(2).joinToString(" • ")
+            Text(
+                text = summary,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 8.dp, start = 56.dp),
+                maxLines = 1
+            )
         }
     }
 }

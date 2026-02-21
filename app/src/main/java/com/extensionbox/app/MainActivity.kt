@@ -6,41 +6,27 @@ import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Dashboard
-import androidx.compose.material.icons.filled.Extension
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.core.content.ContextCompat
-import androidx.navigation.NavGraph.Companion.findStartDestination
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.currentBackStackEntryAsState
-import androidx.navigation.compose.rememberNavController
-import com.extensionbox.app.ui.screens.AboutScreen
-import com.extensionbox.app.ui.screens.DashboardScreen
-import com.extensionbox.app.ui.screens.ExtensionsScreen
-import com.extensionbox.app.ui.screens.SettingsScreen
-import com.extensionbox.app.ui.theme.ExtensionBoxTheme
-
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
-import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
-
-import androidx.activity.enableEdgeToEdge
+import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import androidx.navigation.NavDestination.Companion.hierarchy
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.compose.*
+import com.extensionbox.app.ui.components.AppScaffold
+import com.extensionbox.app.ui.screens.*
+import com.extensionbox.app.ui.theme.ExtensionBoxTheme
 
 class MainActivity : ComponentActivity() {
 
@@ -51,7 +37,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        
         requestPerms()
 
         setContent {
@@ -77,11 +62,11 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-sealed class Screen(val route: String, val title: String, val icon: ImageVector) {
-    data object Dashboard : Screen("dashboard", "Dashboard", Icons.Filled.Dashboard)
-    data object Extensions : Screen("extensions", "Extensions", Icons.Filled.Extension)
-    data object Settings : Screen("settings", "Settings", Icons.Filled.Settings)
-    data object About : Screen("about", "About", Icons.Filled.Info)
+sealed class Screen(val route: String, val title: String, val selectedIcon: ImageVector, val unselectedIcon: ImageVector) {
+    data object Dashboard : Screen("dashboard", "Dashboard", Icons.Filled.Dashboard, Icons.Outlined.Dashboard)
+    data object Extensions : Screen("extensions", "Extensions", Icons.Filled.Extension, Icons.Outlined.Extension)
+    data object Settings : Screen("settings", "Settings", Icons.Filled.Settings, Icons.Outlined.Settings)
+    data object About : Screen("about", "About", Icons.Filled.Info, Icons.Outlined.Info)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -89,41 +74,38 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector)
 fun MainApp() {
     val navController = rememberNavController()
     val screens = listOf(Screen.Dashboard, Screen.Extensions, Screen.Settings, Screen.About)
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentDestination = navBackStackEntry?.destination
+    
+    val currentScreen = screens.find { it.route == currentDestination?.route } ?: Screen.Dashboard
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
-    val navBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = navBackStackEntry?.destination?.route
-    val currentScreen = screens.find { it.route == currentRoute } ?: Screen.Dashboard
-
-    Scaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        topBar = {
-            LargeTopAppBar(
-                title = { 
-                    Text(
-                        text = currentScreen.title,
-                        fontWeight = FontWeight.Bold
-                    ) 
-                },
-                scrollBehavior = scrollBehavior
-            )
-        },
+    AppScaffold(
+        title = currentScreen.title,
+        scrollBehavior = scrollBehavior,
         bottomBar = {
-            NavigationBar {
+            NavigationBar(
+                containerColor = MaterialTheme.colorScheme.surface,
+                tonalElevation = 8.dp
+            ) {
                 screens.forEach { screen ->
+                    val selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true
                     NavigationBarItem(
-                        icon = { Icon(screen.icon, contentDescription = screen.title) },
+                        icon = { 
+                            Icon(
+                                if (selected) screen.selectedIcon else screen.unselectedIcon,
+                                contentDescription = screen.title
+                            ) 
+                        },
                         label = { Text(screen.title) },
-                        selected = currentRoute == screen.route,
+                        selected = selected,
                         onClick = {
-                            if (currentRoute != screen.route) {
-                                navController.navigate(screen.route) {
-                                    popUpTo(navController.graph.findStartDestination().id) {
-                                        saveState = true
-                                    }
-                                    launchSingleTop = true
-                                    restoreState = true
+                            navController.navigate(screen.route) {
+                                popUpTo(navController.graph.findStartDestination().id) {
+                                    saveState = true
                                 }
+                                launchSingleTop = true
+                                restoreState = true
                             }
                         }
                     )
@@ -135,10 +117,18 @@ fun MainApp() {
             navController = navController,
             startDestination = Screen.Dashboard.route,
             modifier = Modifier.padding(innerPadding),
-            enterTransition = { fadeIn(animationSpec = tween(300)) + slideInHorizontally(animationSpec = tween(300), initialOffsetX = { it / 2 }) },
-            exitTransition = { fadeOut(animationSpec = tween(300)) + slideOutHorizontally(animationSpec = tween(300), targetOffsetX = { -it / 2 }) },
-            popEnterTransition = { fadeIn(animationSpec = tween(300)) + slideInHorizontally(animationSpec = tween(300), initialOffsetX = { -it / 2 }) },
-            popExitTransition = { fadeOut(animationSpec = tween(300)) + slideOutHorizontally(animationSpec = tween(300), targetOffsetX = { it / 2 }) }
+            enterTransition = { 
+                fadeIn(animationSpec = tween(400)) + slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Start, tween(400))
+            },
+            exitTransition = { 
+                fadeOut(animationSpec = tween(400)) + slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Start, tween(400))
+            },
+            popEnterTransition = { 
+                fadeIn(animationSpec = tween(400)) + slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.End, tween(400))
+            },
+            popExitTransition = { 
+                fadeOut(animationSpec = tween(400)) + slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.End, tween(400))
+            }
         ) {
             composable(Screen.Dashboard.route) { DashboardScreen() }
             composable(Screen.Extensions.route) { ExtensionsScreen() }
