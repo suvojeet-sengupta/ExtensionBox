@@ -296,6 +296,19 @@ fun SettingsScreen() {
                     }
                 )
                 HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                var notifCompact by remember { mutableStateOf(Prefs.getBool(context, "notif_compact_style", true)) }
+                ListItem(
+                    headlineContent = { Text("Compact Notification Style") },
+                    supportingContent = { Text("Use simplified bulleted list in expanded view") },
+                    leadingContent = { Icon(Icons.Default.Dehaze, contentDescription = null) },
+                    trailingContent = {
+                        Switch(checked = notifCompact, onCheckedChange = {
+                            notifCompact = it
+                            Prefs.setBool(context, "notif_compact_style", it)
+                        })
+                    }
+                )
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                 var contextAware by remember { mutableStateOf(Prefs.getBool(context, "notif_context_aware", true)) }
                 ListItem(
                     headlineContent = { Text("Context Aware Notification") },

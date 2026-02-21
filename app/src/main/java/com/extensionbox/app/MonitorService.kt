@@ -299,18 +299,23 @@ class MonitorService : Service() {
 
     private fun buildExpanded(): String {
         if (!::modules.isInitialized) return "Starting..."
+        val compactStyle = Prefs.getBool(this, "notif_compact_style", true)
         val showAll = Prefs.getBool(this, "notif_show_all", false)
         val alive = getAliveModulesSorted()
         
-        val lines = if (showAll) {
-            alive.mapNotNull { m -> m.detail().takeIf { it.isNotEmpty() } }
-        } else {
+        val allLines = if (compactStyle) {
             // Compact style: use compact strings but in a list
             alive.mapNotNull { m -> 
                 val c = m.compact()
                 if (c.isNotEmpty()) "• ${m.name()}: $c" else null 
             }
+        } else {
+            // Detailed style: use m.detail()
+            alive.mapNotNull { m -> m.detail().takeIf { it.isNotEmpty() } }
         }
+        
+        val maxItems = if (showAll) allLines.size else Prefs.getInt(this, "notif_compact_items", 4)
+        val lines = allLines.take(maxItems)
         
         return if (lines.isEmpty()) "Enable extensions from the app" else lines.joinToString("\n")
     }
