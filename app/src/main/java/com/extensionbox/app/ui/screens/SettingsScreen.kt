@@ -38,33 +38,26 @@ import rikka.shizuku.Shizuku
 import java.io.BufferedReader
 import java.io.InputStreamReader
 
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.extensionbox.app.ui.viewmodel.SettingsViewModel
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen() {
+fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
     val context = LocalContext.current
     val scrollState = rememberScrollState()
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    var themeIndex by remember { mutableStateOf(Prefs.getInt(context, "app_theme", ThemeHelper.MONET)) }
+    val themeIndex by viewModel.themeIndex.collectAsState()
     var expanded by remember { mutableStateOf(false) }
 
-    // Shizuku State
-    var isShizukuRunning by remember { mutableStateOf(try { Shizuku.pingBinder() } catch (e: Exception) { false }) }
-    var shizukuPermissionGranted by remember { 
-        mutableStateOf(
-            try {
-                Shizuku.pingBinder() && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
-            } catch (e: Exception) { false }
-        )
-    }
+    val isShizukuRunning by viewModel.isShizukuRunning.collectAsState()
+    val shizukuPermissionGranted by viewModel.shizukuPermissionGranted.collectAsState()
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
-                isShizukuRunning = try { Shizuku.pingBinder() } catch (e: Exception) { false }
-                shizukuPermissionGranted = try {
-                    isShizukuRunning && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
-                } catch (e: Exception) { false }
+                viewModel.refreshShizukuState()
                 
                 if (isShizukuRunning && !shizukuPermissionGranted) {
                     try {
@@ -75,15 +68,12 @@ fun SettingsScreen() {
         }
         
         val permissionListener = Shizuku.OnRequestPermissionResultListener { _, grantResult ->
-            shizukuPermissionGranted = (grantResult == PackageManager.PERMISSION_GRANTED)
+            viewModel.setShizukuPermission(grantResult == PackageManager.PERMISSION_GRANTED)
         }
         
         val binderListener = object : Shizuku.OnBinderReceivedListener {
             override fun onBinderReceived() {
-                isShizukuRunning = true
-                shizukuPermissionGranted = try {
-                    Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
-                } catch (e: Exception) { false }
+                viewModel.refreshShizukuState()
             }
         }
 
@@ -214,8 +204,7 @@ fun SettingsScreen() {
                         DropdownMenuItem(
                             text = { Text(name) },
                             onClick = {
-                                themeIndex = index
-                                Prefs.setInt(context, "app_theme", index)
+                                viewModel.updateTheme(index)
                                 expanded = false
                             }
                         )

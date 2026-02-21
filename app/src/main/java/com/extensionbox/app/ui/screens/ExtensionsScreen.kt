@@ -28,21 +28,14 @@ import com.extensionbox.app.ui.ModuleRegistry
 import com.extensionbox.app.ui.components.AppCard
 import com.extensionbox.app.MonitorService
 
-@Composable
-fun ExtensionsScreen() {
-    val context = LocalContext.current
-    
-    // State for module enabled/disabled
-    val moduleStates = remember {
-        (0 until ModuleRegistry.count()).map { i ->
-            mutableStateOf(Prefs.isModuleEnabled(context, ModuleRegistry.keyAt(i), ModuleRegistry.defAt(i)))
-        }
-    }
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.extensionbox.app.ui.viewmodel.ExtensionsViewModel
 
-    // State for card expansion
-    val expandedStates = remember {
-        mutableStateMapOf<String, Boolean>()
-    }
+@Composable
+fun ExtensionsScreen(viewModel: ExtensionsViewModel = viewModel()) {
+    val context = LocalContext.current
+    val moduleStates by viewModel.moduleStates.collectAsState()
+    val expandedStates = viewModel.expandedStates
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -54,12 +47,12 @@ fun ExtensionsScreen() {
             val icon = ModuleRegistry.iconAt(index)
             val name = ModuleRegistry.nameAt(index)
             val desc = ModuleRegistry.descAt(index)
-            val isEnabled = moduleStates[index]
+            val isEnabled = moduleStates[key] ?: ModuleRegistry.defAt(index)
             val isExpanded = expandedStates[key] ?: false
 
             AppCard(
-                onClick = { expandedStates[key] = !isExpanded },
-                containerColor = if (isEnabled.value) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceContainerLow
+                onClick = { viewModel.toggleExpansion(key) },
+                containerColor = if (isEnabled) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceContainerLow
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -70,7 +63,7 @@ fun ExtensionsScreen() {
                             .size(48.dp)
                             .clip(CircleShape)
                             .background(
-                                if (isEnabled.value) MaterialTheme.colorScheme.primaryContainer 
+                                if (isEnabled) MaterialTheme.colorScheme.primaryContainer 
                                 else MaterialTheme.colorScheme.surfaceVariant
                             ),
                         contentAlignment = Alignment.Center
@@ -79,7 +72,7 @@ fun ExtensionsScreen() {
                             imageVector = icon,
                             contentDescription = null,
                             modifier = Modifier.size(28.dp),
-                            tint = if (isEnabled.value) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = if (isEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
 
@@ -90,7 +83,7 @@ fun ExtensionsScreen() {
                             text = name,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold,
-                            color = if (isEnabled.value) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            color = if (isEnabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                         )
                         Text(
                             text = desc,
@@ -100,12 +93,11 @@ fun ExtensionsScreen() {
                     }
 
                     Switch(
-                        checked = isEnabled.value,
+                        checked = isEnabled,
                         onCheckedChange = {
-                            isEnabled.value = it
-                            Prefs.setModuleEnabled(context, key, it)
+                            viewModel.toggleModule(key, it)
                         },
-                        thumbContent = if (isEnabled.value) {
+                        thumbContent = if (isEnabled) {
                             {
                                 Icon(
                                     imageVector = Icons.Default.Check,

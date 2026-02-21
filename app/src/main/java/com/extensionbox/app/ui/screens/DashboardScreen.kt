@@ -39,62 +39,22 @@ import kotlinx.coroutines.delay
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.extensionbox.app.ui.viewmodel.DashboardViewModel
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun DashboardScreen() {
+fun DashboardScreen(viewModel: DashboardViewModel = viewModel()) {
     val context = LocalContext.current
-    var isRunning by remember { mutableStateOf(Prefs.isRunning(context)) }
-    var activeCount by remember { mutableStateOf(0) }
+    val isRunning by viewModel.isRunning.collectAsState()
+    val activeCount by viewModel.activeCount.collectAsState()
+    val dashData by viewModel.dashData.collectAsState()
     
-    // Module order state
-    val savedOrder = remember { Prefs.getString(context, "dash_card_order", "") ?: "" }
-    val initialOrder = if (savedOrder.isEmpty()) {
-        (0 until ModuleRegistry.count()).map { ModuleRegistry.keyAt(it) }
-    } else {
-        savedOrder.split(",").filter { it.isNotEmpty() }
-    }
-    val moduleOrder = remember { mutableStateListOf<String>().apply { addAll(initialOrder) } }
-
-    // Expansion state
-    val expandedStates = remember { mutableStateMapOf<String, Boolean>() }
-
-    var dashData by remember { mutableStateOf<Map<String, Map<String, String>>>(emptyMap()) }
-
-    // Update isRunning and data periodically
-    LaunchedEffect(Unit) {
-        while (true) {
-            isRunning = Prefs.isRunning(context)
-            
-            var count = 0
-            for (i in 0 until ModuleRegistry.count()) {
-                if (Prefs.isModuleEnabled(context, ModuleRegistry.keyAt(i), ModuleRegistry.defAt(i)))
-                    count++
-            }
-            activeCount = count
-
-            if (isRunning) {
-                val dataMap = mutableMapOf<String, Map<String, String>>()
-                for (key in moduleOrder) {
-                    val data = MonitorService.getModuleData(key)
-                    if (data != null && data.isNotEmpty()) {
-                        dataMap[key] = data
-                    }
-                }
-                dashData = dataMap
-            } else {
-                dashData = emptyMap()
-            }
-            
-            delay(2000)
-        }
-    }
+    val moduleOrder = viewModel.moduleOrder
 
     val lazyListState = rememberLazyListState()
     val reorderableState = rememberReorderableLazyListState(lazyListState) { from, to ->
-        moduleOrder.apply {
-            add(to.index, removeAt(from.index))
-        }
-        Prefs.setString(context, "dash_card_order", moduleOrder.joinToString(","))
+        viewModel.updateOrder(from.index, to.index)
     }
 
     LazyColumn(
@@ -104,7 +64,7 @@ fun DashboardScreen() {
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item(key = "status_header") {
-            StatusHero(isRunning, activeCount, context) { isRunning = it }
+            StatusHero(isRunning, activeCount, context) { /* Status change is handled via intent in StatusHero, ViewModel will pick it up on next poll */ }
         }
 
         if (!isRunning) {
@@ -143,12 +103,8 @@ fun DashboardScreen() {
                             DashCard(
                                 key = key,
                                 data = data,
-                                isExpanded = if (Prefs.getBool(context, "dash_expand_cards", true)) (expandedStates[key] ?: false) else true,
-                                onExpandToggle = { 
-                                    if (Prefs.getBool(context, "dash_expand_cards", true)) {
-                                        expandedStates[key] = !(expandedStates[key] ?: false)
-                                    }
-                                }
+                                isExpanded = viewModel.isExpanded(key),
+                                onExpandToggle = { viewModel.toggleExpansion(key) }
                             )
                         }
                     }
