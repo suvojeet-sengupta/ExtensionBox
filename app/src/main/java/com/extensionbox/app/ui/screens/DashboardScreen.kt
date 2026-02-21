@@ -34,12 +34,15 @@ import com.extensionbox.app.ui.ModuleRegistry
 import kotlinx.coroutines.delay
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
+import sh.calvin.reorderable.reorderable
+import sh.calvin.reorderable.detectReorderAfterLongPress
 
 import androidx.graphics.shapes.CornerRounding
 import androidx.graphics.shapes.Morph
 import androidx.graphics.shapes.RoundedPolygon
-import androidx.graphics.shapes.toComposePath
+import androidx.graphics.shapes.star
 import androidx.compose.ui.graphics.drawscope.Fill
+import androidx.compose.ui.graphics.asComposePath
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -49,7 +52,7 @@ fun DashboardScreen() {
     var activeCount by remember { mutableStateOf(0) }
     
     // Module order state
-    val savedOrder = Prefs.getString(context, "dash_card_order", "") ?: ""
+    val savedOrder = remember { Prefs.getString(context, "dash_card_order", "") ?: "" }
     val initialOrder = if (savedOrder.isEmpty()) {
         (0 until ModuleRegistry.count()).map { ModuleRegistry.keyAt(it) }
     } else {
@@ -101,7 +104,10 @@ fun DashboardScreen() {
 
     LazyColumn(
         state = lazyListState,
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .reorderable(reorderableState)
+            .detectReorderAfterLongPress(reorderableState),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
@@ -131,8 +137,8 @@ fun DashboardScreen() {
                 val data = dashData[key]
                 if (data != null) {
                     ReorderableItem(reorderableState, key = key) { isDragging ->
-                        val elevation by animateDpAsState(if (isDragging) 8.dp else 0.dp)
-                        val scale by animateFloatAsState(if (isDragging) 1.05f else 1.0f)
+                        val elevation by animateDpAsState(if (isDragging) 8.dp else 0.dp, label = "elevation")
+                        val scale by animateFloatAsState(if (isDragging) 1.05f else 1.0f, label = "scale")
 
                         Box(
                             modifier = Modifier
@@ -146,8 +152,7 @@ fun DashboardScreen() {
                                 key = key,
                                 data = data,
                                 isExpanded = expandedStates[key] ?: false,
-                                onExpandToggle = { expandedStates[key] = !(expandedStates[key] ?: false) },
-                                modifier = Modifier.reorderableItemModifier(reorderableState, key)
+                                onExpandToggle = { expandedStates[key] = !(expandedStates[key] ?: false) }
                             )
                         }
                     }
@@ -255,12 +260,19 @@ fun MorphingBackground(progress: Float, color: Color) {
         )
     }
     val morph = remember { Morph(shapeA, shapeB) }
+    val path = remember { android.graphics.Path() }
 
     androidx.compose.foundation.Canvas(
         modifier = Modifier.fillMaxSize().offset(x = 100.dp, y = (-20).dp)
     ) {
-        val path = morph.toComposePath(progress)
-        drawPath(path, color, style = Fill)
+        val matrix = android.graphics.Matrix()
+        matrix.setScale(size.minDimension / 1.5f, size.minDimension / 1.5f)
+        
+        path.reset()
+        morph.toPath(progress, path)
+        path.transform(matrix)
+        
+        drawPath(path.asComposePath(), color, style = Fill)
     }
 }
 
@@ -353,19 +365,4 @@ fun DashCard(
             }
         }
     }
-}
-
-// Extension function for reorderable modifier to clean up the code
-fun Modifier.reorderableItemModifier(state: sh.calvin.reorderable.ReorderableLazyListState, key: String): Modifier {
-    return this.then(Modifier.pointerInput(Unit) {
-        detectDragGesturesAfterLongPress(
-            onDragStart = { state.onDragStart(key) },
-            onDrag = { change, dragAmount -> 
-                change.consume()
-                state.onDrag(dragAmount) 
-            },
-            onDragEnd = { state.onDragInterrupted() },
-            onDragCancel = { state.onDragInterrupted() }
-        )
-    })
 }
