@@ -5,7 +5,6 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -22,7 +21,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.asComposePath
+import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -32,17 +32,17 @@ import com.extensionbox.app.MonitorService
 import com.extensionbox.app.Prefs
 import com.extensionbox.app.ui.ModuleRegistry
 import kotlinx.coroutines.delay
+
+// Reorderable 3.0.0 imports
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
-import sh.calvin.reorderable.reorderable
-import sh.calvin.reorderable.detectReorderAfterLongPress
 
+// Graphics Shapes 1.0.1 imports
 import androidx.graphics.shapes.CornerRounding
 import androidx.graphics.shapes.Morph
 import androidx.graphics.shapes.RoundedPolygon
 import androidx.graphics.shapes.star
-import androidx.compose.ui.graphics.drawscope.Fill
-import androidx.compose.ui.graphics.asComposePath
+import androidx.graphics.shapes.toPath
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -104,10 +104,7 @@ fun DashboardScreen() {
 
     LazyColumn(
         state = lazyListState,
-        modifier = Modifier
-            .fillMaxSize()
-            .reorderable(reorderableState)
-            .detectReorderAfterLongPress(reorderableState),
+        modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
@@ -186,7 +183,6 @@ fun StatusHeader(isRunning: Boolean, activeCount: Int, context: android.content.
         )
     ) {
         Box {
-            // Morphing background element for expressive feel
             MorphingBackground(
                 progress = morphProgress,
                 color = if (isRunning) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
@@ -246,13 +242,13 @@ fun StatusHeader(isRunning: Boolean, activeCount: Int, context: android.content.
 
 @Composable
 fun MorphingBackground(progress: Float, color: Color) {
-    val shapeA = remember {
+    val shapeA = remember<RoundedPolygon> {
         RoundedPolygon(
             numVertices = 6,
             rounding = CornerRounding(0.2f)
         )
     }
-    val shapeB = remember {
+    val shapeB = remember<RoundedPolygon> {
         RoundedPolygon.star(
             numVerticesPerRadius = 6,
             innerRadius = 0.7f,
@@ -260,7 +256,7 @@ fun MorphingBackground(progress: Float, color: Color) {
         )
     }
     val morph = remember { Morph(shapeA, shapeB) }
-    val path = remember { android.graphics.Path() }
+    val androidPath = remember { android.graphics.Path() }
 
     androidx.compose.foundation.Canvas(
         modifier = Modifier.fillMaxSize().offset(x = 100.dp, y = (-20).dp)
@@ -268,11 +264,11 @@ fun MorphingBackground(progress: Float, color: Color) {
         val matrix = android.graphics.Matrix()
         matrix.setScale(size.minDimension / 1.5f, size.minDimension / 1.5f)
         
-        path.reset()
-        morph.toPath(progress, path)
-        path.transform(matrix)
+        androidPath.rewind()
+        morph.toPath(progress, androidPath)
+        androidPath.transform(matrix)
         
-        drawPath(path.asComposePath(), color, style = Fill)
+        drawPath(androidPath.asComposePath(), color, style = Fill)
     }
 }
 
@@ -321,7 +317,6 @@ fun DashCard(
                     )
                 }
                 
-                // Expansion indicator
                 Icon(
                     imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
                     contentDescription = null,
@@ -354,7 +349,6 @@ fun DashCard(
                     }
                 }
             } else {
-                // Collapsed view: show only first 2 points in a single line or summary
                 val summary = data.values.take(2).joinToString(" • ")
                 Text(
                     text = summary,
