@@ -80,6 +80,13 @@ dependencies {
     // Material Components (required for DynamicColors)
     implementation 'com.google.android.material:material:1.13.0-alpha10'
 
+    // Graphics Shapes for Morphing
+    implementation "androidx.graphics:graphics-shapes:1.0.0-beta01"
+    implementation "androidx.graphics:graphics-shapes-compose:1.0.0-beta01"
+
+    // Reorderable
+    implementation "sh.calvin.reorderable:reorderable:2.4.2"
+
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.2.0'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.6.1'
