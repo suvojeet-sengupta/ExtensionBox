@@ -86,7 +86,6 @@ class SystemAccess(ctx: Context) {
     private val rootAvailable: Boolean = detectRoot()
     
     private fun shizukuAvailableNow(): Boolean {
-        if (rootAvailable) return false
         return try {
             Shizuku.pingBinder() && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
         } catch (_: Exception) {

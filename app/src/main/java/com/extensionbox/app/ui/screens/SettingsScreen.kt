@@ -33,11 +33,16 @@ import android.net.Uri
 import android.content.Intent
 import com.extensionbox.app.SystemAccess
 
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.compose.ui.platform.LocalLifecycleOwner
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen() {
     val context = LocalContext.current
     val scrollState = rememberScrollState()
+    val lifecycleOwner = LocalLifecycleOwner.current
 
     var themeIndex by remember { mutableStateOf(Prefs.getInt(context, "app_theme", ThemeHelper.MONET)) }
     var expanded by remember { mutableStateOf(false) }
@@ -51,13 +56,35 @@ fun SettingsScreen() {
         )
     }
 
-    DisposableEffect(Unit) {
-        val listener = Shizuku.OnRequestPermissionResultListener { _, grantResult ->
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                shizukuPermissionGranted = try {
+                    Shizuku.pingBinder() && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
+                } catch (e: Exception) { false }
+            }
+        }
+        
+        val permissionListener = Shizuku.OnRequestPermissionResultListener { _, grantResult ->
             shizukuPermissionGranted = (grantResult == PackageManager.PERMISSION_GRANTED)
         }
-        Shizuku.addRequestPermissionResultListener(listener)
+        
+        val binderListener = object : Shizuku.OnBinderReceivedListener {
+            override fun onBinderReceived() {
+                shizukuPermissionGranted = try {
+                    Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
+                } catch (e: Exception) { false }
+            }
+        }
+
+        lifecycleOwner.lifecycle.addObserver(observer)
+        Shizuku.addRequestPermissionResultListener(permissionListener)
+        Shizuku.addBinderReceivedListener(binderListener)
+
         onDispose {
-            Shizuku.removeRequestPermissionResultListener(listener)
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            Shizuku.removeRequestPermissionResultListener(permissionListener)
+            Shizuku.removeBinderReceivedListener(binderListener)
         }
     }
 
