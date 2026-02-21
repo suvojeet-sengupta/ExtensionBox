@@ -80,44 +80,52 @@ fun MainApp() {
     val currentScreen = screens.find { it.route == currentDestination?.route } ?: Screen.Dashboard
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
-    AppScaffold(
-        title = currentScreen.title,
-        scrollBehavior = scrollBehavior,
-        bottomBar = {
-            NavigationBar(
-                containerColor = MaterialTheme.colorScheme.surface,
-                tonalElevation = 8.dp
-            ) {
-                screens.forEach { screen ->
-                    val selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true
-                    NavigationBarItem(
-                        icon = { 
-                            Icon(
-                                if (selected) screen.selectedIcon else screen.unselectedIcon,
-                                contentDescription = screen.title
-                            ) 
-                        },
-                        label = { Text(screen.title) },
-                        selected = selected,
-                        onClick = {
-                            navController.navigate(screen.route) {
-                                popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = true
+        AppScaffold(
+            title = currentScreen.title,
+            scrollBehavior = scrollBehavior,
+            bottomBar = {
+                Column {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    NavigationBar(
+                        containerColor = MaterialTheme.colorScheme.background,
+                        tonalElevation = 0.dp,
+                        windowInsets = WindowInsets.navigationBars
+                    ) {
+                        screens.forEach { screen ->
+                            val selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true
+                            NavigationBarItem(
+                                icon = { 
+                                    Icon(
+                                        if (selected) screen.selectedIcon else screen.unselectedIcon,
+                                        contentDescription = screen.title
+                                    ) 
+                                },
+                                label = { Text(screen.title) },
+                                selected = selected,
+                                colors = NavigationBarItemDefaults.colors(
+                                    indicatorColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
+                                ),
+                                onClick = {
+                                    navController.navigate(screen.route) {
+                                        popUpTo(navController.graph.findStartDestination().id) {
+                                            saveState = true
+                                        }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
                                 }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
+                            )
                         }
-                    )
+                    }
                 }
             }
-        }
-    ) { innerPadding ->
-        NavHost(
-            navController = navController,
-            startDestination = Screen.Dashboard.route,
-            modifier = Modifier.padding(innerPadding),
-            enterTransition = { 
+            ) { innerPadding ->
+                NavHost(
+                    navController = navController,
+                    startDestination = Screen.Dashboard.route,
+                    modifier = Modifier.padding(top = innerPadding.calculateTopPadding()),
+                    enterTransition = { 
+         
                 fadeIn(animationSpec = tween(400)) + slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Start, tween(400))
             },
             exitTransition = { 

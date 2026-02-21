@@ -112,7 +112,7 @@ fun DashboardScreen(viewModel: DashboardViewModel = viewModel()) {
             }
         }
         
-        item { Spacer(modifier = Modifier.height(80.dp)) }
+        item { Spacer(modifier = Modifier.height(100.dp)) }
     }
 }
 
