@@ -84,19 +84,29 @@ class SystemAccess(ctx: Context) {
     }
 
     private val rootAvailable: Boolean = detectRoot()
-    private val shizukuAvailable: Boolean = !rootAvailable && detectShizuku(ctx)
-    val tier: String = when {
-        rootAvailable -> TIER_ROOT
-        shizukuAvailable -> TIER_SHIZUKU
-        else -> TIER_NORMAL
+    
+    private fun shizukuAvailableNow(): Boolean {
+        if (rootAvailable) return false
+        return try {
+            Shizuku.pingBinder() && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
+        } catch (_: Exception) {
+            false
+        }
     }
 
-    fun isEnhanced(): Boolean = rootAvailable || shizukuAvailable
+    val tier: String 
+        get() = when {
+            rootAvailable -> TIER_ROOT
+            shizukuAvailableNow() -> TIER_SHIZUKU
+            else -> TIER_NORMAL
+        }
+
+    fun isEnhanced(): Boolean = rootAvailable || shizukuAvailableNow()
 
     fun readSysFile(path: String): String? {
         readFileDirect(path)?.let { return it }
         if (rootAvailable) readFileRoot(path)?.let { return it }
-        if (shizukuAvailable) readFileShizuku(path)?.let { return it }
+        if (shizukuAvailableNow()) readFileShizuku(path)?.let { return it }
         return null
     }
 
@@ -224,8 +234,8 @@ class SystemAccess(ctx: Context) {
                 val parts = line.split(",")
                 for (part in parts) {
                     if (part.contains("user") || part.contains("sys") || part.contains("nice") || part.contains("irq")) {
-                        val num = part.replace(Regex("[^0-9.]"), "")
-                        if (num.isNotEmpty()) total += num.toFloat()
+                        val m = Regex("""(\d+(?:\.\d+)?)\s*%""").find(part)
+                        if (m != null) total += m.groupValues[1].toFloat()
                     }
                 }
                 if (total > 0) return total
@@ -236,11 +246,11 @@ class SystemAccess(ctx: Context) {
                 var total = -1f
                 for (w in words) {
                     if (w.contains("idle")) {
-                        val num = w.replace(Regex("[^0-9.]"), "")
-                        if (num.isNotEmpty()) idle = num.toFloat()
+                        val m = Regex("""(\d+(?:\.\d+)?)\s*%""").find(w)
+                        if (m != null) idle = m.groupValues[1].toFloat()
                     } else if (w.contains("cpu")) {
-                        val num = w.replace(Regex("[^0-9.]"), "")
-                        if (num.isNotEmpty()) total = num.toFloat()
+                        val m = Regex("""(\d+(?:\.\d+)?)\s*%""").find(w)
+                        if (m != null) total = m.groupValues[1].toFloat()
                     }
                 }
                 if (total > 0 && idle >= 0) {

@@ -148,8 +148,12 @@ fun DashboardScreen() {
                             DashCard(
                                 key = key,
                                 data = data,
-                                isExpanded = expandedStates[key] ?: false,
-                                onExpandToggle = { expandedStates[key] = !(expandedStates[key] ?: false) }
+                                isExpanded = if (Prefs.getBool(context, "dash_expand_cards", true)) (expandedStates[key] ?: false) else true,
+                                onExpandToggle = { 
+                                    if (Prefs.getBool(context, "dash_expand_cards", true)) {
+                                        expandedStates[key] = !(expandedStates[key] ?: false)
+                                    }
+                                }
                             )
                         }
                     }

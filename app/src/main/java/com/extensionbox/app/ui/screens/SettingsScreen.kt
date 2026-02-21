@@ -38,7 +38,6 @@ import com.extensionbox.app.SystemAccess
 fun SettingsScreen() {
     val context = LocalContext.current
     val scrollState = rememberScrollState()
-    val sysAccess = remember { SystemAccess(context) }
 
     var themeIndex by remember { mutableStateOf(Prefs.getInt(context, "app_theme", ThemeHelper.MONET)) }
     var expanded by remember { mutableStateOf(false) }
@@ -51,6 +50,18 @@ fun SettingsScreen() {
             } catch (e: Exception) { false }
         )
     }
+
+    DisposableEffect(Unit) {
+        val listener = Shizuku.OnRequestPermissionResultListener { _, grantResult ->
+            shizukuPermissionGranted = (grantResult == PackageManager.PERMISSION_GRANTED)
+        }
+        Shizuku.addRequestPermissionResultListener(listener)
+        onDispose {
+            Shizuku.removeRequestPermissionResultListener(listener)
+        }
+    }
+
+    val sysAccess = remember(shizukuPermissionGranted) { SystemAccess(context) }
 
     // Export/Import Launchers
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
@@ -150,7 +161,7 @@ fun SettingsScreen() {
                         leadingContent = { Icon(Icons.Default.VpnKey, contentDescription = null) },
                         modifier = Modifier.clickable {
                             try {
-                                Shizuku.requestPermission(0)
+                                Shizuku.requestPermission(1001)
                             } catch (e: Exception) {
                                 Toast.makeText(context, "Request failed", Toast.LENGTH_SHORT).show()
                             }
@@ -223,6 +234,19 @@ fun SettingsScreen() {
             shape = MaterialTheme.shapes.large
         ) {
             Column {
+                var expandCards by remember { mutableStateOf(Prefs.getBool(context, "dash_expand_cards", true)) }
+                ListItem(
+                    headlineContent = { Text("Expandable Cards") },
+                    supportingContent = { Text("Allow cards to be expanded on the dashboard") },
+                    leadingContent = { Icon(Icons.Default.ViewAgenda, contentDescription = null) },
+                    trailingContent = {
+                        Switch(checked = expandCards, onCheckedChange = {
+                            expandCards = it
+                            Prefs.setBool(context, "dash_expand_cards", it)
+                        })
+                    }
+                )
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                 var contextAware by remember { mutableStateOf(Prefs.getBool(context, "notif_context_aware", true)) }
                 ListItem(
                     headlineContent = { Text("Context Aware Notification") },

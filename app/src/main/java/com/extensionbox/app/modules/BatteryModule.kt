@@ -114,11 +114,7 @@ class BatteryModule : Module {
         val t = temp / 10f
 
         val sb = StringBuilder()
-        if (sys?.isEnhanced() == true && !cpuTemp.isNaN()) {
-            sb.append("🔋 $level% • ${ma}mA (${String.format(Locale.US, "%.1f", w)}W) • ${Fmt.temp(t)} • CPU: ${Fmt.temp(cpuTemp)}\n")
-        } else {
-            sb.append("🔋 $level% • ${ma}mA (${String.format(Locale.US, "%.1f", w)}W) • ${Fmt.temp(t)}\n")
-        }
+        sb.append("🔋 $level% • ${ma}mA (${String.format(Locale.US, "%.1f", w)}W) • ${Fmt.temp(t)}\n")
 
         if (sys?.isEnhanced() == true && realHealthPct > 0 && cycleCount >= 0) {
             val design = sys?.readDesignCapacity(ctx!!) ?: 0
@@ -162,7 +158,6 @@ class BatteryModule : Module {
         d["battery.cycle_count"] = if (cycleCount >= 0) cycleCount.toString() else "—"
         d["battery.real_health_pct"] = if (realHealthPct > 0) "$realHealthPct%" else "—"
         d["battery.actual_cap"] = if (actualCap > 0) "$actualCap mAh" else "—"
-        d["battery.cpu_temp"] = if (!cpuTemp.isNaN()) Fmt.temp(cpuTemp) else "—"
 
         return d
     }

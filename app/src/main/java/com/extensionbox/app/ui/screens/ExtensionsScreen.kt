@@ -301,6 +301,75 @@ fun ModuleSettings(key: String, context: android.content.Context) {
                     )
                 }
             }
+            "fap" -> {
+                var fapLimit by remember { mutableStateOf(Prefs.getInt(context, "fap_daily_limit", 0).toFloat()) }
+                SettingSlider(
+                    label = "Daily Goal/Limit",
+                    value = fapLimit,
+                    valueRange = 0f..10f,
+                    steps = 10,
+                    onValueChange = {
+                        fapLimit = it
+                        Prefs.setInt(context, "fap_daily_limit", it.toInt())
+                    },
+                    formatter = { if (it == 0f) "No Limit" else "${it.toInt()} times" }
+                )
+                
+                Button(
+                    onClick = {
+                        com.extensionbox.app.MonitorService.getInstance()?.getFapModule()?.increment()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Log Action")
+                }
+            }
+            "speedtest" -> {
+                var autoTest by remember { mutableStateOf(Prefs.getBool(context, "spd_auto_test", true)) }
+                SettingSwitch(
+                    label = "Auto Test",
+                    checked = autoTest,
+                    onCheckedChange = {
+                        autoTest = it
+                        Prefs.setBool(context, "spd_auto_test", it)
+                    }
+                )
+                if (autoTest) {
+                    var freq by remember { mutableStateOf(Prefs.getInt(context, "spd_test_freq", 60).toFloat()) }
+                    SettingSlider(
+                        label = "Test Frequency",
+                        value = freq,
+                        valueRange = 15f..240f,
+                        steps = 15,
+                        onValueChange = {
+                            freq = it
+                            Prefs.setInt(context, "spd_test_freq", it.toInt())
+                        },
+                        formatter = { "${it.toInt()}m" }
+                    )
+                }
+                var wifiOnly by remember { mutableStateOf(Prefs.getBool(context, "spd_wifi_only", true)) }
+                SettingSwitch(
+                    label = "WiFi Only",
+                    checked = wifiOnly,
+                    onCheckedChange = {
+                        wifiOnly = it
+                        Prefs.setBool(context, "spd_wifi_only", it)
+                    }
+                )
+                var showPing by remember { mutableStateOf(Prefs.getBool(context, "spd_show_ping", true)) }
+                SettingSwitch(
+                    label = "Show Ping",
+                    checked = showPing,
+                    onCheckedChange = {
+                        showPing = it
+                        Prefs.setBool(context, "spd_show_ping", it)
+                    }
+                )
+            }
         }
     }
 }
