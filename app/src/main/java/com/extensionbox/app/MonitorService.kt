@@ -283,14 +283,15 @@ class MonitorService : Service() {
         if (parts.isEmpty()) return "All extensions disabled"
 
         var base = parts.joinToString(" • ")
-        if (base.length > 50 && parts.size > 4) {
-            base = parts.take(4).joinToString(" • ")
+        if (base.length > 60 && parts.size > 1) {
+            // If too long, try to show fewer items or truncate
+            base = parts.take(parts.size - 1).joinToString(" • ") + " ..."
         }
 
         if (contextAware) {
             val batMod = modules.filterIsInstance<BatteryModule>().firstOrNull()
             if (batMod?.alive() == true && batMod.getLevel() <= 10) {
-                base += " • ⚡Charge now!"
+                base += " • ⚡Charge!"
             }
         }
         return base
@@ -298,8 +299,19 @@ class MonitorService : Service() {
 
     private fun buildExpanded(): String {
         if (!::modules.isInitialized) return "Starting..."
+        val showAll = Prefs.getBool(this, "notif_show_all", false)
         val alive = getAliveModulesSorted()
-        val lines = alive.mapNotNull { m -> m.detail().takeIf { it.isNotEmpty() } }
+        
+        val lines = if (showAll) {
+            alive.mapNotNull { m -> m.detail().takeIf { it.isNotEmpty() } }
+        } else {
+            // Compact style: use compact strings but in a list
+            alive.mapNotNull { m -> 
+                val c = m.compact()
+                if (c.isNotEmpty()) "• ${m.name()}: $c" else null 
+            }
+        }
+        
         return if (lines.isEmpty()) "Enable extensions from the app" else lines.joinToString("\n")
     }
 

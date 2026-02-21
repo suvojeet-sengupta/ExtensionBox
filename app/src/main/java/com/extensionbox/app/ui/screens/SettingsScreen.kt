@@ -283,6 +283,19 @@ fun SettingsScreen() {
                     }
                 )
                 HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                var notifAll by remember { mutableStateOf(Prefs.getBool(context, "notif_show_all", false)) }
+                ListItem(
+                    headlineContent = { Text("Show All in Notification") },
+                    supportingContent = { Text("Show all enabled extensions in expanded view") },
+                    leadingContent = { Icon(Icons.Default.ListAlt, contentDescription = null) },
+                    trailingContent = {
+                        Switch(checked = notifAll, onCheckedChange = {
+                            notifAll = it
+                            Prefs.setBool(context, "notif_show_all", it)
+                        })
+                    }
+                )
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                 var contextAware by remember { mutableStateOf(Prefs.getBool(context, "notif_context_aware", true)) }
                 ListItem(
                     headlineContent = { Text("Context Aware Notification") },
