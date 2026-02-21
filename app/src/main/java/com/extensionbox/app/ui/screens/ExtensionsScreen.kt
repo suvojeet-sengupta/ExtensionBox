@@ -9,13 +9,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.scale
 import com.extensionbox.app.Prefs
 import com.extensionbox.app.ui.ModuleRegistry
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 
 @Composable
 fun ExtensionsScreen() {
@@ -354,5 +357,3 @@ fun SettingSwitch(
         )
     }
 }
-
-import androidx.compose.ui.draw.scale
