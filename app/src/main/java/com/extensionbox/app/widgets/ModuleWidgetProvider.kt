@@ -32,6 +32,7 @@ open class ModuleWidgetProvider : AppWidgetProvider() {
     class StepWidgetProvider : ModuleWidgetProvider()
     class SpeedTestWidgetProvider : ModuleWidgetProvider()
     class FapWidgetProvider : ModuleWidgetProvider()
+    class AllInOneWidgetProvider : ModuleWidgetProvider()
 
     override fun onUpdate(ctx: Context, mgr: AppWidgetManager, widgetIds: IntArray) {
         val key = resolveKey(javaClass)
@@ -57,6 +58,7 @@ open class ModuleWidgetProvider : AppWidgetProvider() {
                 "StepWidgetProvider" -> "steps"
                 "SpeedTestWidgetProvider" -> "speedtest"
                 "FapWidgetProvider" -> "fap"
+                "AllInOneWidgetProvider" -> "all_in_one"
                 else -> "battery"
             }
         }
@@ -65,24 +67,52 @@ open class ModuleWidgetProvider : AppWidgetProvider() {
             val views = RemoteViews(ctx.packageName, R.layout.widget_module)
 
             // Header
-            val emoji = ModuleRegistry.emojiFor(key)
-            val name = ModuleRegistry.nameFor(key)
-            views.setTextViewText(R.id.widgetTitle, "$emoji  $name")
+            if (key == "all_in_one") {
+                views.setTextViewText(R.id.widgetTitle, "📦 All-in-One Status")
+            } else {
+                val emoji = ModuleRegistry.emojiFor(key)
+                val name = ModuleRegistry.nameFor(key)
+                views.setTextViewText(R.id.widgetTitle, "$emoji  $name")
+            }
 
             // Data
-            val data = MonitorService.getModuleData(key)
             val body = StringBuilder()
-            if (data != null && data.isNotEmpty()) {
-                var shown = 0
-                for ((rawKey, value) in data) {
-                    if (shown >= 6) break
-                    shown++
-                    val label = rawKey.substringAfterLast('.').replaceFirstChar { it.uppercase() }.replace("_", " ")
-                    if (body.isNotEmpty()) body.append("<br>")
-                    body.append("<b>").append(label).append(":</b> ").append(value)
+            if (key == "all_in_one") {
+                // Get data for ALL enabled modules, but only top 1-2 lines each
+                for (i in 0 until ModuleRegistry.count()) {
+                    val mKey = ModuleRegistry.keyAt(i)
+                    if (com.extensionbox.app.Prefs.isModuleEnabled(ctx, mKey, ModuleRegistry.defAt(i))) {
+                        val data = MonitorService.getModuleData(mKey)
+                        if (data != null && data.isNotEmpty()) {
+                            val emoji = ModuleRegistry.emojiFor(mKey)
+                            if (body.isNotEmpty()) body.append("<br>")
+                            body.append("<u>").append(emoji).append(" <b>").append(ModuleRegistry.nameFor(mKey)).append("</b></u><br>")
+                            
+                            var shown = 0
+                            for ((rawKey, value) in data) {
+                                if (shown >= 2) break // Only show top 2 items for each in All-in-One
+                                shown++
+                                val label = rawKey.substringAfterLast('.').replaceFirstChar { it.uppercase() }.replace("_", " ")
+                                body.append("<b>").append(label).append(":</b> ").append(value).append("<br>")
+                            }
+                        }
+                    }
                 }
+                if (body.isEmpty()) body.append("<i>No modules enabled</i>")
             } else {
-                body.append("<i>No data — start monitoring</i>")
+                val data = MonitorService.getModuleData(key)
+                if (data != null && data.isNotEmpty()) {
+                    var shown = 0
+                    for ((rawKey, value) in data) {
+                        if (shown >= 6) break
+                        shown++
+                        val label = rawKey.substringAfterLast('.').replaceFirstChar { it.uppercase() }.replace("_", " ")
+                        if (body.isNotEmpty()) body.append("<br>")
+                        body.append("<b>").append(label).append(":</b> ").append(value)
+                    }
+                } else {
+                    body.append("<i>No data — start monitoring</i>")
+                }
             }
             views.setTextViewText(R.id.widgetBody, Html.fromHtml(body.toString(), Html.FROM_HTML_MODE_COMPACT))
 
@@ -116,7 +146,8 @@ open class ModuleWidgetProvider : AppWidgetProvider() {
                 UptimeWidgetProvider::class.java,
                 StepWidgetProvider::class.java,
                 SpeedTestWidgetProvider::class.java,
-                FapWidgetProvider::class.java
+                FapWidgetProvider::class.java,
+                AllInOneWidgetProvider::class.java
             )
 
             for (providerCls in providers) {
