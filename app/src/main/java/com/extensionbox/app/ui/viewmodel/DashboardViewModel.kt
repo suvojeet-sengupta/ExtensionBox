@@ -30,6 +30,9 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     val moduleOrder = mutableStateListOf<String>()
     val expandedStates = mutableStateMapOf<String, Boolean>()
 
+    private val _visibleModules = MutableStateFlow<List<String>>(emptyList())
+    val visibleModules: StateFlow<List<String>> = _visibleModules.asStateFlow()
+
     init {
         loadOrder()
         startDataPolling()
@@ -46,11 +49,34 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         moduleOrder.addAll(initialOrder)
     }
 
-    fun updateOrder(from: Int, to: Int) {
-        moduleOrder.apply {
-            add(to, removeAt(from))
+    fun updateOrder(fromIndex: Int, toIndex: Int) {
+        val visible = _visibleModules.value
+        // Offset by 1 for StatusHero header
+        val fromVisibleIdx = fromIndex - 1
+        val toVisibleIdx = toIndex - 1
+        
+        if (fromVisibleIdx < 0 || toVisibleIdx < 0 || 
+            fromVisibleIdx >= visible.size || toVisibleIdx >= visible.size) return
+        
+        val fromKey = visible[fromVisibleIdx]
+        val toKey = visible[toVisibleIdx]
+        
+        // Find positions in global order
+        val globalFrom = moduleOrder.indexOf(fromKey)
+        val globalTo = moduleOrder.indexOf(toKey)
+        
+        if (globalFrom != -1 && globalTo != -1) {
+            moduleOrder.apply {
+                add(globalTo, removeAt(globalFrom))
+            }
+            Prefs.setString(context, "dash_card_order", moduleOrder.joinToString(","))
+            updateVisibleModules()
         }
-        Prefs.setString(context, "dash_card_order", moduleOrder.joinToString(","))
+    }
+
+    private fun updateVisibleModules() {
+        val data = _dashData.value
+        _visibleModules.value = moduleOrder.filter { data.containsKey(it) }
     }
 
     private fun startDataPolling() {
@@ -60,24 +86,22 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
                 _isRunning.value = running
                 
                 var count = 0
+                val dataMap = mutableMapOf<String, Map<String, String>>()
                 for (i in 0 until ModuleRegistry.count()) {
-                    if (Prefs.isModuleEnabled(context, ModuleRegistry.keyAt(i), ModuleRegistry.defAt(i)))
+                    val key = ModuleRegistry.keyAt(i)
+                    if (Prefs.isModuleEnabled(context, key, ModuleRegistry.defAt(i))) {
                         count++
-                }
-                _activeCount.value = count
-
-                if (running) {
-                    val dataMap = mutableMapOf<String, Map<String, String>>()
-                    for (key in moduleOrder) {
-                        val data = MonitorService.getModuleData(key)
-                        if (data != null && data.isNotEmpty()) {
-                            dataMap[key] = data
+                        if (running) {
+                            val moduleData = MonitorService.getModuleData(key)
+                            if (moduleData != null && moduleData.isNotEmpty()) {
+                                dataMap[key] = moduleData
+                            }
                         }
                     }
-                    _dashData.value = dataMap
-                } else {
-                    _dashData.value = emptyMap()
                 }
+                _activeCount.value = count
+                _dashData.value = dataMap
+                updateVisibleModules()
                 
                 delay(2000)
             }

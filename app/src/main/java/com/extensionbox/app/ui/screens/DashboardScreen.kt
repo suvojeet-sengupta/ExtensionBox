@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.PlayArrow
@@ -38,6 +39,7 @@ import kotlinx.coroutines.delay
 // Reorderable 3.0.0 imports
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
+import sh.calvin.reorderable.ReorderableCollectionItemScope
 
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.extensionbox.app.ui.viewmodel.DashboardViewModel
@@ -49,8 +51,7 @@ fun DashboardScreen(viewModel: DashboardViewModel = viewModel()) {
     val isRunning by viewModel.isRunning.collectAsState()
     val activeCount by viewModel.activeCount.collectAsState()
     val dashData by viewModel.dashData.collectAsState()
-    
-    val moduleOrder = viewModel.moduleOrder
+    val visibleModules by viewModel.visibleModules.collectAsState()
 
     val lazyListState = rememberLazyListState()
     val reorderableState = rememberReorderableLazyListState(lazyListState) { from, to ->
@@ -85,28 +86,26 @@ fun DashboardScreen(viewModel: DashboardViewModel = viewModel()) {
                 }
             }
         } else {
-            items(moduleOrder, key = { it }) { key ->
+            items(visibleModules, key = { it }) { key ->
                 val data = dashData[key]
                 if (data != null) {
                     ReorderableItem(reorderableState, key = key) { isDragging ->
                         val elevation by animateDpAsState(if (isDragging) 8.dp else 0.dp, label = "elevation")
                         val scale by animateFloatAsState(if (isDragging) 1.02f else 1.0f, label = "scale")
 
-                        Box(
+                        DashCard(
+                            key = key,
+                            data = data,
+                            isExpanded = viewModel.isExpanded(key),
+                            onExpandToggle = { viewModel.toggleExpansion(key) },
+                            reorderableItemScope = this,
                             modifier = Modifier
                                 .graphicsLayer {
                                     this.scaleX = scale
                                     this.scaleY = scale
                                     this.shadowElevation = elevation.toPx()
                                 }
-                        ) {
-                            DashCard(
-                                key = key,
-                                data = data,
-                                isExpanded = viewModel.isExpanded(key),
-                                onExpandToggle = { viewModel.toggleExpansion(key) }
-                            )
-                        }
+                        )
                     }
                 }
             }
@@ -197,6 +196,7 @@ fun DashCard(
     data: Map<String, String>, 
     isExpanded: Boolean, 
     onExpandToggle: () -> Unit,
+    reorderableItemScope: ReorderableCollectionItemScope? = null,
     modifier: Modifier = Modifier
 ) {
     val icon = ModuleRegistry.iconFor(key)
@@ -213,6 +213,18 @@ fun DashCard(
             modifier = Modifier.fillMaxWidth()
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                if (reorderableItemScope != null) {
+                    with(reorderableItemScope) {
+                        Icon(
+                            imageVector = Icons.Default.DragHandle,
+                            contentDescription = "Reorder",
+                            modifier = Modifier
+                                .padding(end = 8.dp)
+                                .draggableHandle(),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                        )
+                    }
+                }
                 Box(
                     modifier = Modifier
                         .size(40.dp)
