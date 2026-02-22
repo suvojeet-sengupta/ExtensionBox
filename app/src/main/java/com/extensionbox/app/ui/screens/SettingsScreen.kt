@@ -246,6 +246,34 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
         // --- Monitoring Section ---
         SettingsGroup(title = "Monitoring", icon = Icons.Default.Analytics) {
             AppCard {
+                var resetFull by remember { mutableStateOf(Prefs.getBool(context, "scr_reset_full", true)) }
+                SettingsToggle(
+                    title = "Reset on Full Charge",
+                    summary = "Clear stats when battery reaches 100%",
+                    icon = Icons.Default.BatteryChargingFull,
+                    checked = resetFull,
+                    onCheckedChange = {
+                        resetFull = it
+                        Prefs.setBool(context, "scr_reset_full", it)
+                    }
+                )
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant)
+
+                var resetBoot by remember { mutableStateOf(Prefs.getBool(context, "scr_reset_boot", true)) }
+                SettingsToggle(
+                    title = "Reset on Reboot",
+                    summary = "Clear stats after system restart",
+                    icon = Icons.Default.RestartAlt,
+                    checked = resetBoot,
+                    onCheckedChange = {
+                        resetBoot = it
+                        Prefs.setBool(context, "scr_reset_boot", it)
+                    }
+                )
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant)
+
                 var contextAware by remember { mutableStateOf(Prefs.getBool(context, "notif_context_aware", true)) }
                 SettingsToggle(
                     title = "Context Aware",

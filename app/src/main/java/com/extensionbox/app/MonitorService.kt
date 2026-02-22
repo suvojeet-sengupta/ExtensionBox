@@ -101,6 +101,8 @@ class MonitorService : Service() {
     }
 
     private fun checkBatteryFullReset() {
+        if (!Prefs.getBool(this, "scr_reset_full", true)) return
+        
         val batMod = modules.filterIsInstance<BatteryModule>().firstOrNull() ?: return
         if (!batMod.alive()) return
 
