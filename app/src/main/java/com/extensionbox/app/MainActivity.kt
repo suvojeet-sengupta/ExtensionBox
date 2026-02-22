@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -36,10 +37,18 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        ThemeHelper.apply(this)
         enableEdgeToEdge()
         requestPerms()
 
         setContent {
+            val themeIndex by Prefs.getIntFlow(this, "app_theme", ThemeHelper.MONET).collectAsState(initial = ThemeHelper.MONET)
+            
+            // Re-apply activity theme when index changes (for window background etc)
+            LaunchedEffect(themeIndex) {
+                ThemeHelper.apply(this@MainActivity)
+            }
+
             ExtensionBoxTheme {
                 MainApp()
             }

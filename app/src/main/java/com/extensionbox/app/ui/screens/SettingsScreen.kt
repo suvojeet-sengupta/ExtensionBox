@@ -211,6 +211,22 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
                     }
                 }
 
+                if (themeIndex == ThemeHelper.MONET && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant)
+                    
+                    var dynamicColor by remember { mutableStateOf(Prefs.getBool(context, "dynamic_color", true)) }
+                    SettingsToggle(
+                        title = "Dynamic Color",
+                        summary = "Use system wallpaper colors",
+                        icon = Icons.Default.InvertColors,
+                        checked = dynamicColor,
+                        onCheckedChange = {
+                            dynamicColor = it
+                            Prefs.setBool(context, "dynamic_color", it)
+                        }
+                    )
+                }
+
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant)
 
                 var expandCards by remember { mutableStateOf(Prefs.getBool(context, "dash_expand_cards", true)) }

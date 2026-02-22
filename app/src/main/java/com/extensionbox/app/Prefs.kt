@@ -48,6 +48,9 @@ object Prefs {
         c.dataStore.data.map { it[prefKey] ?: def }.first()
     }
 
+    fun getIntFlow(c: Context, key: String, def: Int) = 
+        c.dataStore.data.map { it[intPreferencesKey(key)] ?: def }
+
     fun setInt(c: Context, key: String, value: Int) = runBlocking {
         val prefKey = intPreferencesKey(key)
         c.dataStore.edit { it[prefKey] = value }
@@ -67,6 +70,9 @@ object Prefs {
         val prefKey = booleanPreferencesKey(key)
         c.dataStore.data.map { it[prefKey] ?: def }.first()
     }
+
+    fun getBoolFlow(c: Context, key: String, def: Boolean) = 
+        c.dataStore.data.map { it[booleanPreferencesKey(key)] ?: def }
 
     fun setBool(c: Context, key: String, value: Boolean) = runBlocking {
         val prefKey = booleanPreferencesKey(key)

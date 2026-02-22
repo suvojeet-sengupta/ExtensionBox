@@ -10,6 +10,9 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
@@ -105,11 +108,13 @@ fun ExtensionBoxTheme(
     content: @Composable () -> Unit
 ) {
     val context = LocalContext.current
-    val themeIndex = Prefs.getInt(context, "app_theme", ThemeHelper.MONET)
+    val initialTheme = remember { Prefs.getInt(context, "app_theme", ThemeHelper.MONET) }
+    val themeIndex by Prefs.getIntFlow(context, "app_theme", ThemeHelper.MONET).collectAsState(initial = initialTheme)
+    val isDynamic by Prefs.getBoolFlow(context, "dynamic_color", true).collectAsState(initial = true)
 
     val colorScheme = when (themeIndex) {
         ThemeHelper.MONET -> {
-            if (dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (isDynamic && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
             } else {
                 if (darkTheme) DarkColorScheme else LightColorScheme
