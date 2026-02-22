@@ -195,4 +195,16 @@ class ScreenModule : Module {
             Prefs.setBool(ctx, "scr_alert_fired", true)
         }
     }
+
+    override fun reset() {
+        val c = ctx ?: return
+        onAccMs = 0
+        offAccMs = 0
+        onDrain = 0f
+        offDrain = 0f
+        periodStart = SystemClock.elapsedRealtime()
+        periodStartLevel = getBatteryLevel()
+        Prefs.setLong(c, "scr_on_acc", 0)
+        Prefs.setBool(c, "scr_alert_fired", false)
+    }
 }

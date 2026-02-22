@@ -9,7 +9,10 @@ class BootReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent?) {
         if (Intent.ACTION_BOOT_COMPLETED == intent?.action) {
             if (Prefs.isRunning(ctx)) {
-                ContextCompat.startForegroundService(ctx, Intent(ctx, MonitorService::class.java))
+                val serviceIntent = Intent(ctx, MonitorService::class.java).apply {
+                    action = MonitorService.ACTION_RESET
+                }
+                ContextCompat.startForegroundService(ctx, serviceIntent)
             }
         }
     }

@@ -20,6 +20,7 @@ class MonitorService : Service() {
 
     companion object {
         const val ACTION_STOP = "com.extensionbox.STOP"
+        const val ACTION_RESET = "com.extensionbox.RESET"
         private const val MONITOR_CH = "ebox_monitor"
         private const val ALERT_CH = "ebox_alerts"
         private const val NOTIF_ID = 1001
@@ -93,7 +94,33 @@ class MonitorService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
+        if (intent?.action == ACTION_RESET) {
+            resetAllModules()
+        }
         return START_STICKY
+    }
+
+    private fun checkBatteryFullReset() {
+        val batMod = modules.filterIsInstance<BatteryModule>().firstOrNull() ?: return
+        if (!batMod.alive()) return
+
+        val isFull = batMod.isFull()
+        val wasFull = Prefs.getBool(this, "bat_was_full", false)
+
+        if (isFull && !wasFull) {
+            resetAllModules()
+            Prefs.setBool(this, "bat_was_full", true)
+        } else if (!isFull && wasFull && batMod.getLevel() < 95) {
+            Prefs.setBool(this, "bat_was_full", false)
+        }
+    }
+
+    fun resetAllModules() {
+        if (::modules.isInitialized) {
+            for (m in modules) {
+                if (m.alive()) m.reset()
+            }
+        }
     }
 
     override fun onDestroy() {
@@ -131,6 +158,7 @@ class MonitorService : Service() {
 
     private suspend fun doTickCycle() = withContext(Dispatchers.IO) {
         checkRollover()
+        checkBatteryFullReset()
         syncModules()
         val now = SystemClock.elapsedRealtime()
         var changed = false

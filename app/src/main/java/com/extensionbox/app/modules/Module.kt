@@ -19,6 +19,7 @@ interface Module {
     fun dataPoints(): LinkedHashMap<String, String>
     fun alive(): Boolean
     fun checkAlerts(ctx: Context)
+    fun reset() {}
 
     /**
      * Priority for notification ordering. Lower = higher priority.

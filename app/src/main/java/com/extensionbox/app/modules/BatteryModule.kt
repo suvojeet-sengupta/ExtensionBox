@@ -191,6 +191,8 @@ class BatteryModule : Module {
 
     fun getLevel(): Int = level
 
+    fun isFull(): Boolean = status == BatteryManager.BATTERY_STATUS_FULL || level >= 100
+
     private fun isCharging(): Boolean = status == BatteryManager.BATTERY_STATUS_CHARGING
 
     private fun timeLeft(): String {
