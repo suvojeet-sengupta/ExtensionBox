@@ -6,6 +6,7 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.text.Html
 import android.widget.RemoteViews
 import com.extensionbox.app.MainActivity
 import com.extensionbox.app.MonitorService
@@ -77,13 +78,13 @@ open class ModuleWidgetProvider : AppWidgetProvider() {
                     if (shown >= 6) break
                     shown++
                     val label = rawKey.substringAfterLast('.').replaceFirstChar { it.uppercase() }.replace("_", " ")
-                    if (body.isNotEmpty()) body.append("\n")
-                    body.append(label).append(": ").append(value)
+                    if (body.isNotEmpty()) body.append("<br>")
+                    body.append("<b>").append(label).append(":</b> ").append(value)
                 }
             } else {
-                body.append("No data — start monitoring")
+                body.append("<i>No data — start monitoring</i>")
             }
-            views.setTextViewText(R.id.widgetBody, body.toString())
+            views.setTextViewText(R.id.widgetBody, Html.fromHtml(body.toString(), Html.FROM_HTML_MODE_COMPACT))
 
             // Click -> open app
             val openIntent = Intent(ctx, MainActivity::class.java).apply {
