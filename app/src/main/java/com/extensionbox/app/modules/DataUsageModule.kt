@@ -1,0 +1,183 @@
+package com.extensionbox.app.modules
+
+import android.app.NotificationManager
+import android.content.Context
+import android.net.TrafficStats
+import androidx.core.app.NotificationCompat
+import com.extensionbox.app.Fmt
+import com.extensionbox.app.Prefs
+import com.extensionbox.app.R
+import com.extensionbox.app.SystemAccess
+import java.util.Calendar
+import java.util.LinkedHashMap
+import java.util.Locale
+
+class DataUsageModule : Module {
+
+    private var ctx: Context? = null
+    private var running = false
+    private var prevTotal = 0L
+    private var prevMobile = 0L
+    private var dailyTotal = 0L
+    private var dailyWifi = 0L
+    private var dailyMobile = 0L
+    private var monthTotal = 0L
+    private var monthWifi = 0L
+    private var monthMobile = 0L
+
+    override fun key(): String = "data"
+    override fun name(): String = "Data Usage"
+    override fun emoji(): String = "📊"
+    override fun description(): String = "Daily & monthly, WiFi & mobile"
+    override fun defaultEnabled(): Boolean = true
+    override fun alive(): Boolean = running
+    override fun priority(): Int = 50
+
+    override fun tickIntervalMs(): Int = ctx?.let { Prefs.getInt(it, "dat_interval", 60000) } ?: 60000
+
+    override fun start(ctx: Context, sys: SystemAccess) {
+        this.ctx = ctx
+        val rx = TrafficStats.getTotalRxBytes()
+        val tx = TrafficStats.getTotalTxBytes()
+        prevTotal = if (rx != TrafficStats.UNSUPPORTED.toLong()) rx + tx else 0
+        val mrx = TrafficStats.getMobileRxBytes()
+        val mtx = TrafficStats.getMobileTxBytes()
+        prevMobile = if (mrx != TrafficStats.UNSUPPORTED.toLong()) mrx + mtx else 0
+
+        dailyTotal = Prefs.getLong(ctx, "dat_daily_total", 0)
+        dailyWifi = Prefs.getLong(ctx, "dat_daily_wifi", 0)
+        dailyMobile = Prefs.getLong(ctx, "dat_daily_mobile", 0)
+        monthTotal = Prefs.getLong(ctx, "dat_month_total", 0)
+        monthWifi = Prefs.getLong(ctx, "dat_month_wifi", 0)
+        monthMobile = Prefs.getLong(ctx, "dat_month_mobile", 0)
+        running = true
+    }
+
+    override fun stop() {
+        running = false
+    }
+
+    override fun tick() {
+        val c = ctx ?: return
+        rollover()
+
+        val rx = TrafficStats.getTotalRxBytes()
+        val tx = TrafficStats.getTotalTxBytes()
+        if (rx == TrafficStats.UNSUPPORTED.toLong()) return
+        val total = rx + tx
+
+        val mrx = TrafficStats.getMobileRxBytes()
+        val mtx = TrafficStats.getMobileTxBytes()
+        val mobile = if (mrx != TrafficStats.UNSUPPORTED.toLong()) mrx + mtx else 0
+
+        if (prevTotal > 0 && total >= prevTotal) {
+            val dt = total - prevTotal
+            var dm = mobile - prevMobile
+            if (dm < 0) dm = 0
+            var dw = dt - dm
+            if (dw < 0) dw = 0
+
+            dailyTotal += dt
+            dailyMobile += dm
+            dailyWifi += dw
+            monthTotal += dt
+            monthMobile += dm
+            monthWifi += dw
+
+            Prefs.setLong(c, "dat_daily_total", dailyTotal)
+            Prefs.setLong(c, "dat_daily_wifi", dailyWifi)
+            Prefs.setLong(c, "dat_daily_mobile", dailyMobile)
+            Prefs.setLong(c, "dat_month_total", monthTotal)
+            Prefs.setLong(c, "dat_month_wifi", monthWifi)
+            Prefs.setLong(c, "dat_month_mobile", monthMobile)
+        }
+        prevTotal = total
+        prevMobile = mobile
+    }
+
+    private fun rollover() {
+        val c = ctx ?: return
+        val cal = Calendar.getInstance()
+        val day = cal.get(Calendar.DAY_OF_YEAR)
+        val lastDay = Prefs.getInt(c, "dat_last_day", -1)
+        if (lastDay != -1 && lastDay != day) {
+            dailyTotal = 0
+            dailyWifi = 0
+            dailyMobile = 0
+            Prefs.setLong(c, "dat_daily_total", 0)
+            Prefs.setLong(c, "dat_daily_wifi", 0)
+            Prefs.setLong(c, "dat_daily_mobile", 0)
+        }
+        Prefs.setInt(c, "dat_last_day", day)
+
+        val billingDay = Prefs.getInt(c, "dat_billing_day", 1)
+        val dom = cal.get(Calendar.DAY_OF_MONTH)
+        val lastBillCheck = Prefs.getInt(c, "dat_last_bill", -1)
+        if (dom == billingDay && lastBillCheck != day) {
+            monthTotal = 0
+            monthWifi = 0
+            monthMobile = 0
+            Prefs.setLong(c, "dat_month_total", 0)
+            Prefs.setLong(c, "dat_month_wifi", 0)
+            Prefs.setLong(c, "dat_month_mobile", 0)
+            Prefs.setBool(c, "dat_plan_alert_fired", false)
+        }
+        Prefs.setInt(c, "dat_last_bill", day)
+    }
+
+    override fun compact(): String = "Today:${Fmt.bytes(dailyTotal)}"
+
+    override fun detail(): String {
+        val sb = StringBuilder()
+        val c = ctx
+        val breakdown = if (c != null) Prefs.getBool(c, "dat_show_breakdown", true) else true
+
+        if (breakdown) {
+            sb.append("📊 Today: ${Fmt.bytes(dailyTotal)} (W:${Fmt.bytes(dailyWifi)} M:${Fmt.bytes(dailyMobile)})\n")
+        } else {
+            sb.append("📊 Today: ${Fmt.bytes(dailyTotal)}\n")
+        }
+
+        sb.append("   Month: ${Fmt.bytes(monthTotal)}")
+
+        val planMb = if (c != null) Prefs.getInt(c, "dat_plan_limit", 0) else 0
+        if (planMb > 0) {
+            val planBytes = planMb * 1024L * 1024L
+            val pct = monthTotal * 100f / planBytes
+            sb.append(String.format(Locale.US, " / %s (%.1f%%)", Fmt.bytes(planBytes), pct))
+        }
+        return sb.toString()
+    }
+
+    override fun dataPoints(): LinkedHashMap<String, String> {
+        val d = LinkedHashMap<String, String>()
+        d["data.today_total"] = Fmt.bytes(dailyTotal)
+        d["data.today_wifi"] = Fmt.bytes(dailyWifi)
+        d["data.today_mobile"] = Fmt.bytes(dailyMobile)
+        d["data.month_total"] = Fmt.bytes(monthTotal)
+        return d
+    }
+
+    override fun checkAlerts(ctx: Context) {
+        val planMb = Prefs.getInt(ctx, "dat_plan_limit", 0)
+        if (planMb <= 0) return
+        val alertPct = Prefs.getInt(ctx, "dat_plan_alert_pct", 90)
+        val fired = Prefs.getBool(ctx, "dat_plan_alert_fired", false)
+        val planBytes = planMb * 1024L * 1024L
+        val pct = monthTotal * 100f / planBytes
+
+        if (pct >= alertPct && !fired) {
+            try {
+                val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                nm.notify(2005, NotificationCompat.Builder(ctx, "ebox_alerts")
+                    .setSmallIcon(R.drawable.ic_notif)
+                    .setContentTitle("⚠️ Data Plan Warning")
+                    .setContentText(String.format(Locale.US, "Used %.0f%% of %s plan", pct, Fmt.bytes(planBytes)))
+                    .setPriority(NotificationCompat.PRIORITY_HIGH)
+                    .setAutoCancel(true).build())
+            } catch (ignored: Exception) {
+            }
+            Prefs.setBool(ctx, "dat_plan_alert_fired", true)
+        }
+    }
+}
