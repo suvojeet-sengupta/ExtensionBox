@@ -11,6 +11,10 @@ import com.extensionbox.app.Fmt
 import com.extensionbox.app.Prefs
 import com.extensionbox.app.R
 import com.extensionbox.app.SystemAccess
+import com.extensionbox.app.db.AppDatabase
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import java.util.LinkedHashMap
 import java.util.Locale
 import kotlin.math.abs
@@ -186,6 +190,28 @@ class BatteryModule : Module {
         }
         if (tempFired && currentTemp < tempThresh - 3) {
             Prefs.setBool(ctx, "bat_temp_fired", false)
+        }
+
+        // --- Smart Alert: Abnormal Discharge ---
+        if (Prefs.getBool(ctx, "bat_smart_alerts", true) && !isCharging()) {
+            val db = AppDatabase.getDatabase(ctx)
+            val scope = CoroutineScope(Dispatchers.IO)
+            scope.launch {
+                val fifteenMinsAgo = System.currentTimeMillis() - (15 * 60 * 1000)
+                val history = db.moduleDataDao().getHistoryList(key(), fifteenMinsAgo)
+                if (history.size > 2) {
+                    val firstPoint = history.first().data["battery.level"]?.removeSuffix("%")?.toIntOrNull() ?: return@launch
+                    val currentLevel = level
+                    val drop = firstPoint - currentLevel
+                    val lastFired = Prefs.getLong(ctx, "bat_abnormal_last_fired", 0L)
+                    val now = System.currentTimeMillis()
+
+                    if (drop >= 5 && (now - lastFired) > 30 * 60 * 1000) { // 5% drop in 15 mins, fire once per 30 mins
+                        fireAlert(ctx, 2003, "🚨 Abnormal Discharge", "Battery dropped $drop% in last 15 mins!")
+                        Prefs.setLong(ctx, "bat_abnormal_last_fired", now)
+                    }
+                }
+            }
         }
     }
 

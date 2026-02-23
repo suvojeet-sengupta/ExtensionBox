@@ -13,7 +13,10 @@ import androidx.core.app.NotificationCompat
 import com.extensionbox.app.modules.*
 import com.extensionbox.app.widgets.ModuleWidgetProvider
 import kotlinx.coroutines.*
+import com.extensionbox.app.db.AppDatabase
+import com.extensionbox.app.db.ModuleDataEntity
 import java.util.Calendar
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.abs
 
 class MonitorService : Service() {
@@ -27,7 +30,7 @@ class MonitorService : Service() {
         private const val NIGHT_SUMMARY_ID = 2099
 
         private var instance: MonitorService? = null
-        private val moduleData = HashMap<String, LinkedHashMap<String, String>>()
+        private val moduleData = ConcurrentHashMap<String, LinkedHashMap<String, String>>()
 
         fun getInstance(): MonitorService? = instance
         fun getModuleData(key: String): LinkedHashMap<String, String>? = moduleData[key]
@@ -35,15 +38,32 @@ class MonitorService : Service() {
 
     private lateinit var sysAccess: SystemAccess
     private lateinit var modules: List<Module>
-    private val lastTickTime = HashMap<String, Long>()
+    private lateinit var database: AppDatabase
+    private var initialized = false
+    private val lastTickTime = ConcurrentHashMap<String, Long>()
     private var nightSummarySent = false
+    private var isScreenOn = true
 
     private val serviceJob = SupervisorJob()
     private val serviceScope = CoroutineScope(Dispatchers.Main + serviceJob)
     private var tickerJob: Job? = null
 
+    private val screenReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: android.content.Context?, intent: android.content.Intent?) {
+            when (intent?.action) {
+                Intent.ACTION_SCREEN_ON -> {
+                    isScreenOn = true
+                    if (initialized) startTicker() // Immediate refresh on wake
+                }
+                Intent.ACTION_SCREEN_OFF -> {
+                    isScreenOn = false
+                }
+            }
+        }
+    }
+
     fun getFapModule(): FapCounterModule? {
-        return if (::modules.isInitialized) modules.filterIsInstance<FapCounterModule>().firstOrNull() else null
+        return if (initialized) modules.filterIsInstance<FapCounterModule>().firstOrNull() else null
     }
 
     override fun onCreate() {
@@ -51,26 +71,37 @@ class MonitorService : Service() {
         instance = this
         createChannels()
 
-        sysAccess = SystemAccess(this)
-        modules = listOf(
-            BatteryModule(),
-            CpuRamModule(),
-            ScreenModule(),
-            SleepModule(),
-            NetworkModule(),
-            DataUsageModule(),
-            UnlockModule(),
-            StorageModule(),
-            ConnectionModule(),
-            UptimeModule(),
-            StepModule(),
-            SpeedTestModule(),
-            FapCounterModule()
-        )
-
+        // Start foreground immediately to satisfy system requirements
         startForeground(NOTIF_ID, buildNotification())
         
+        val filter = android.content.IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_ON)
+            addAction(Intent.ACTION_SCREEN_OFF)
+        }
+        registerReceiver(screenReceiver, filter)
+
+        // Asynchronous heavy initialization
         serviceScope.launch(Dispatchers.IO) {
+            database = AppDatabase.getDatabase(this@MonitorService)
+            sysAccess = SystemAccess(this@MonitorService)
+            
+            modules = listOf(
+                BatteryModule(),
+                CpuRamModule(),
+                ScreenModule(),
+                SleepModule(),
+                NetworkModule(),
+                DataUsageModule(),
+                UnlockModule(),
+                StorageModule(),
+                ConnectionModule(),
+                UptimeModule(),
+                StepModule(),
+                SpeedTestModule(),
+                FapCounterModule()
+            )
+            
+            initialized = true
             syncModules()
             startTicker()
         }
@@ -79,6 +110,7 @@ class MonitorService : Service() {
     }
 
     private fun startTicker() {
+        if (!initialized) return
         tickerJob?.cancel()
         tickerJob = serviceScope.launch(Dispatchers.IO) {
             while (isActive) {
@@ -95,13 +127,16 @@ class MonitorService : Service() {
             return START_NOT_STICKY
         }
         if (intent?.action == ACTION_RESET) {
-            resetAllModules()
+            serviceScope.launch(Dispatchers.IO) {
+                while (!initialized) delay(100)
+                resetAllModules()
+            }
         }
         return START_STICKY
     }
 
     private fun checkBatteryFullReset() {
-        if (!Prefs.getBool(this, "scr_reset_full", true)) return
+        if (!initialized || !Prefs.getBool(this, "scr_reset_full", true)) return
         
         val batMod = modules.filterIsInstance<BatteryModule>().firstOrNull() ?: return
         if (!batMod.alive()) return
@@ -118,7 +153,7 @@ class MonitorService : Service() {
     }
 
     fun resetAllModules() {
-        if (::modules.isInitialized) {
+        if (initialized) {
             for (m in modules) {
                 if (m.alive()) m.reset()
             }
@@ -128,10 +163,17 @@ class MonitorService : Service() {
     override fun onDestroy() {
         tickerJob?.cancel()
         serviceJob.cancel()
+        try {
+            unregisterReceiver(screenReceiver)
+        } catch (ignored: Exception) {}
+        
+        if (::sysAccess.isInitialized) {
+            sysAccess.onDestroy()
+        }
         
         runBlocking {
             withContext(Dispatchers.IO) {
-                stopAll()
+                if (initialized) stopAll()
             }
         }
         
@@ -144,7 +186,7 @@ class MonitorService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     private suspend fun syncModules() = withContext(Dispatchers.IO) {
-        if (!::modules.isInitialized) return@withContext
+        if (!initialized) return@withContext
         for (m in modules) {
             val shouldRun = Prefs.isModuleEnabled(this@MonitorService, m.key(), m.defaultEnabled())
             if (shouldRun && !m.alive()) {
@@ -159,23 +201,28 @@ class MonitorService : Service() {
     }
 
     private suspend fun doTickCycle() = withContext(Dispatchers.IO) {
+        if (!initialized) return@withContext
         checkRollover()
         checkBatteryFullReset()
         syncModules()
         val now = SystemClock.elapsedRealtime()
         var changed = false
 
-        if (::modules.isInitialized) {
-            for (m in modules) {
-                if (!m.alive()) continue
-                val last = lastTickTime[m.key()] ?: 0L
-                if (now - last >= m.tickIntervalMs()) {
-                    m.tick()
-                    m.checkAlerts(this@MonitorService)
-                    lastTickTime[m.key()] = now
-                    moduleData[m.key()] = m.dataPoints()
-                    changed = true
-                }
+        for (m in modules) {
+            if (!m.alive()) continue
+            val last = lastTickTime[m.key()] ?: 0L
+            val interval = if (isScreenOn) m.tickIntervalMs() else m.tickIntervalMs() * 3 // Slow down 3x when screen off
+            if (now - last >= interval) {
+                m.tick()
+                m.checkAlerts(this@MonitorService)
+                lastTickTime[m.key()] = now
+                val dp = m.dataPoints()
+                moduleData[m.key()] = dp
+                
+                // Save to database
+                database.moduleDataDao().insert(ModuleDataEntity(moduleKey = m.key(), data = dp))
+                
+                changed = true
             }
         }
         if (changed) {
@@ -191,6 +238,7 @@ class MonitorService : Service() {
     }
 
     private fun checkRollover() {
+        if (!initialized) return
         val cal = Calendar.getInstance()
         val today = cal.get(Calendar.DAY_OF_YEAR)
         val thisMonth = cal.get(Calendar.MONTH)
@@ -211,6 +259,11 @@ class MonitorService : Service() {
             doDayRollover()
             Prefs.setInt(this, "rollover_day", today)
             Prefs.setInt(this, "rollover_year", thisYear)
+
+            // Keep only 24 hours of data
+            serviceScope.launch(Dispatchers.IO) {
+                database.moduleDataDao().clearOldData(System.currentTimeMillis() - (24 * 60 * 60 * 1000))
+            }
         }
 
         if (thisMonth != lastMonth || thisYear != lastYear) {
@@ -241,7 +294,9 @@ class MonitorService : Service() {
     }
 
     private fun calculateNextDelay(): Long {
-        if (!::modules.isInitialized) return 5000L
+        if (!initialized) return 5000L
+        if (!isScreenOn) return 30000L // 30s delay when screen off
+
         val now = SystemClock.elapsedRealtime()
         var minDelay = Long.MAX_VALUE
         for (m in modules) {
@@ -259,7 +314,7 @@ class MonitorService : Service() {
     }
 
     private fun stopAll() {
-        if (::modules.isInitialized) {
+        if (initialized) {
             for (m in modules) {
                 if (m.alive()) m.stop()
             }
