@@ -107,7 +107,7 @@ fun DashboardScreen(viewModel: DashboardViewModel = viewModel()) {
 fun SystemPulseHero(isRunning: Boolean, activeCount: Int, dashData: Map<String, Map<String, String>>, context: android.content.Context) {
     val battery = dashData["battery"]?.get("battery.level")?.removeSuffix("%")?.toIntOrNull() ?: 0
     val temp = dashData["battery"]?.get("battery.temp") ?: "--"
-    val cpu = dashData["cpuram"]?.get("cpu.usage")?.removeSuffix("%")?.toIntOrNull() ?: 0
+    val cpu = dashData["cpu_ram"]?.get("cpu.usage")?.removeSuffix("%")?.toIntOrNull() ?: 0
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -317,7 +317,7 @@ fun extractPoints(key: String, history: List<ModuleDataEntity>): List<Float> {
     return history.mapNotNull { entity ->
         val raw = when (key) {
             "battery" -> entity.data["battery.level"]?.removeSuffix("%")
-            "cpuram" -> entity.data["cpu.usage"]?.removeSuffix("%")
+            "cpu_ram" -> entity.data["cpu.usage"]?.removeSuffix("%")
             "network" -> entity.data["net.down_speed"]?.substringBefore(" ")
             else -> null
         }
