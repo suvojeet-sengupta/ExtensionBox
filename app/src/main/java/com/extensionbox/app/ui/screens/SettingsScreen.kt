@@ -40,6 +40,9 @@ import java.io.InputStreamReader
 
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.extensionbox.app.ui.viewmodel.SettingsViewModel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -88,7 +91,28 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
         }
     }
 
-    val sysAccess = remember(shizukuPermissionGranted) { SystemAccess(context) }
+    // Reactive System Access
+    var sysAccess by remember { mutableStateOf<SystemAccess?>(null) }
+    val scope = rememberCoroutineScope()
+    
+    LaunchedEffect(Unit) {
+        val newAccess = withContext(Dispatchers.IO) {
+            SystemAccess(context)
+        }
+        sysAccess = newAccess
+    }
+
+    // Refresh function
+    fun refreshAccess() {
+        sysAccess = null // Show loading
+        scope.launch {
+            val newAccess = withContext(Dispatchers.IO) {
+                SystemAccess(context)
+            }
+            sysAccess = newAccess
+            viewModel.refreshShizukuState()
+        }
+    }
 
     // Launchers
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
@@ -130,20 +154,33 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
         // --- Permissions Section ---
         SettingsGroup(title = "Permissions", icon = Icons.Default.Security) {
             AppCard {
-                SettingsItem(
-                    title = "System Tier",
-                    summary = "Running in ${sysAccess.tier} mode",
-                    icon = Icons.Default.AdminPanelSettings,
-                    trailing = {
-                        AssistChip(
-                            onClick = {},
-                            label = { Text(sysAccess.tier) },
-                            colors = AssistChipDefaults.assistChipColors(
-                                labelColor = if (sysAccess.isEnhanced()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
-                            )
-                        )
+                val currentAccess = sysAccess
+                
+                if (currentAccess == null) {
+                    Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Checking system access...", style = MaterialTheme.typography.bodyMedium)
                     }
-                )
+                } else {
+                    SettingsItem(
+                        title = "System Access",
+                        summary = "Status: ${currentAccess.tier}\nTap to refresh",
+                        icon = if (currentAccess.isEnhanced()) Icons.Default.Verified else Icons.Default.AdminPanelSettings,
+                        color = if (currentAccess.isEnhanced()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                        trailing = {
+                            IconButton(onClick = { refreshAccess() }) {
+                                Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                            }
+                        },
+                        onClick = { refreshAccess() }
+                    )
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant)
+
+                SettingsItem(
+                    title = "Shizuku Service",
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant)
 
