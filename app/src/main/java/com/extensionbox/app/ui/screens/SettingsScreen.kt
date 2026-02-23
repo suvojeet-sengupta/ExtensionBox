@@ -181,11 +181,6 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
 
                 SettingsItem(
                     title = "Shizuku Service",
-
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant)
-
-                SettingsItem(
-                    title = "Shizuku Service",
                     summary = if (isShizukuRunning) "Service is active" else "Service not found",
                     icon = Icons.Default.Terminal,
                     onClick = {
