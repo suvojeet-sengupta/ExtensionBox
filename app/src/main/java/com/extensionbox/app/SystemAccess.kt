@@ -4,11 +4,9 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.BatteryManager
 import java.io.BufferedReader
-import android.os.Build
-import java.io.File
-import java.io.FileReader
+import java.io.DataOutputStream
 import java.io.InputStreamReader
-import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 import rikka.shizuku.Shizuku
 
 class SystemAccess(ctx: Context) {
@@ -17,74 +15,126 @@ class SystemAccess(ctx: Context) {
         const val TIER_ROOT = "Root"
         const val TIER_SHIZUKU = "Shizuku"
         const val TIER_NORMAL = "Normal"
+    }
 
-        private fun detectRoot(): Boolean {
+    // --- Root Provider Detection ---
+    enum class RootProvider(val label: String) {
+        NONE("None"),
+        MAGISK("Magisk"),
+        KERNEL_SU("KernelSU"),
+        APATCH("APatch"),
+        UNKNOWN("Generic SU")
+    }
+
+    private var _rootProvider: RootProvider = RootProvider.NONE
+    val rootProvider: RootProvider get() = _rootProvider
+
+    // --- Persistent Shell Session ---
+    private class ShellSession {
+        private var process: Process? = null
+        private var writer: DataOutputStream? = null
+        private var reader: BufferedReader? = null
+        private val lock = Any()
+
+        fun isAlive(): Boolean {
             return try {
-                val p = Runtime.getRuntime().exec(arrayOf("su", "-c", "id"))
-                val br = BufferedReader(InputStreamReader(p.inputStream))
-                val line = br.readLine()
-                br.close()
-                val exitCode = p.waitFor()
-                exitCode == 0 && line != null && line.contains("uid=0")
+                process?.exitValue() // Throws if alive
+                false
+            } catch (e: IllegalThreadStateException) {
+                true
+            }
+        }
+
+        fun open(): Boolean {
+            if (isAlive()) return true
+            return try {
+                process = Runtime.getRuntime().exec("su")
+                writer = DataOutputStream(process!!.outputStream)
+                reader = BufferedReader(InputStreamReader(process!!.inputStream))
+                // Test the shell
+                exec("echo test") != null
             } catch (e: Exception) {
                 false
             }
         }
 
-        private fun detectShizuku(ctx: Context): Boolean {
-            return try {
-                if (Shizuku.pingBinder()) {
-                    return Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
+        fun exec(command: String): String? {
+            synchronized(lock) {
+                if (!open()) return null
+                return try {
+                    // Write command + echo marker to know when it ends
+                    writer?.writeBytes("$command\necho __END_CMD__\n")
+                    writer?.flush()
+
+                    val sb = StringBuilder()
+                    var line: String?
+                    while (reader?.readLine().also { line = it } != null) {
+                        if (line == "__END_CMD__") break
+                        if (sb.isNotEmpty()) sb.append("\n")
+                        sb.append(line)
+                    }
+                    sb.toString().trim()
+                } catch (e: Exception) {
+                    process?.destroy() // Kill dead process
+                    null
                 }
-                false
-            } catch (e: Exception) {
-                false
             }
         }
-
-        private fun readFileDirect(path: String): String? {
-            return try {
-                val f = File(path)
-                if (!f.exists() || !f.canRead()) return null
-                val br = BufferedReader(FileReader(f))
-                val line = br.readLine()
-                br.close()
-                if (line != null && line.isNotEmpty()) line.trim() else null
-            } catch (e: Exception) {
-                null
-            }
-        }
-
-        private fun readFileRoot(path: String): String? {
-            return try {
-                val p = Runtime.getRuntime().exec(arrayOf("su", "-c", "cat $path"))
-                val br = BufferedReader(InputStreamReader(p.inputStream))
-                val line = br.readLine()
-                br.close()
-                p.waitFor()
-                if (line != null && line.isNotEmpty()) line.trim() else null
-            } catch (e: Exception) {
-                null
-            }
-        }
-
-        private fun readFileShizuku(path: String): String? {
-            return try {
-                // Use the 3-parameter signature (String[], envp, dir) which is public in Shizuku 12.1.0
-                val p = Shizuku.newProcess(arrayOf("sh", "-c", "cat $path"), null, null)
-                val br = BufferedReader(InputStreamReader(p.inputStream))
-                val line = br.readLine()
-                br.close()
-                p.waitFor()
-                if (line != null && line.isNotEmpty()) line.trim() else null
-            } catch (e: Exception) {
-                null
-            }
+        
+        fun close() {
+            try {
+                writer?.writeBytes("exit\n")
+                writer?.flush()
+                process?.waitFor()
+            } catch (ignored: Exception) {}
+            process = null
         }
     }
 
-    private val rootAvailable: Boolean = detectRoot()
-    private val cache = java.util.concurrent.ConcurrentHashMap<String, Pair<String?, Long>>()
+    private val shell = ShellSession()
+    private val rootAvailable: Boolean
+
+    init {
+        // Try to open root shell immediately to trigger Magisk/KSU prompt
+        rootAvailable = shell.open()
+        if (rootAvailable) {
+            detectRootProvider()
+        }
+    }
+
+    private fun detectRootProvider() {
+        val out = shell.exec("magisk -v")
+        if (out != null && out.isNotEmpty() && !out.contains("not found")) {
+            _rootProvider = RootProvider.MAGISK
+            return
+        }
+        
+        // KernelSU usually exposes /proc/version or specific binary checks, 
+        // but often acts transparently. Check for ksu specific path if 'magisk' failed.
+        val ksuCheck = shell.exec("ls /data/adb/ksu")
+        if (ksuCheck != null && !ksuCheck.contains("No such")) {
+            _rootProvider = RootProvider.KERNEL_SU
+            return
+        }
+        
+        // Simple fallback check for KernelSU via kernel name
+        val kernel = shell.exec("uname -r") ?: ""
+        if (kernel.contains("ksu", ignoreCase = true)) {
+             _rootProvider = RootProvider.KERNEL_SU
+             return
+        }
+
+        // APatch check (look for apatch binary or specific files)
+        val apatchCheck = shell.exec("ls /data/adb/apatch")
+        if (apatchCheck != null && !apatchCheck.contains("No such")) {
+            _rootProvider = RootProvider.APATCH
+            return
+        }
+
+        _rootProvider = RootProvider.UNKNOWN
+    }
+
+    private val cache = ConcurrentHashMap<String, Pair<String?, Long>>()
     private val CACHE_TTL = 1000L // 1 second
 
     private fun shizukuAvailableNow(): Boolean {
@@ -97,7 +147,7 @@ class SystemAccess(ctx: Context) {
 
     val tier: String 
         get() = when {
-            rootAvailable -> TIER_ROOT
+            rootAvailable -> "${TIER_ROOT} (${_rootProvider.label})"
             shizukuAvailableNow() -> TIER_SHIZUKU
             else -> TIER_NORMAL
         }
@@ -116,11 +166,46 @@ class SystemAccess(ctx: Context) {
     }
 
     private fun readSysFileInternal(path: String): String? {
+        // 1. Try direct read (fastest)
         readFileDirect(path)?.let { return it }
-        if (rootAvailable) readFileRoot(path)?.let { return it }
-        if (shizukuAvailableNow()) readFileShizuku(path)?.let { return it }
+        
+        // 2. Try Persistent Root Shell (Interactive)
+        if (rootAvailable) {
+            shell.exec("cat $path")?.let { return it }
+        }
+        
+        // 3. Try Shizuku (if root failed or not available)
+        if (shizukuAvailableNow()) {
+            readFileShizuku(path)?.let { return it }
+        }
+        
         return null
     }
+
+    private fun readFileDirect(path: String): String? {
+        return try {
+            val f = java.io.File(path)
+            if (!f.exists() || !f.canRead()) return null
+            f.readText().trim()
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun readFileShizuku(path: String): String? {
+        return try {
+            val p = Shizuku.newProcess(arrayOf("sh", "-c", "cat $path"), null, null)
+            val br = BufferedReader(InputStreamReader(p.inputStream))
+            val line = br.readLine()
+            br.close()
+            p.waitFor()
+            if (line != null && line.isNotEmpty()) line.trim() else null
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    // --- Hardware Specific Readers ---
 
     fun readBatteryCurrentMa(ctx: Context): Int {
         if (isEnhanced()) {
@@ -216,27 +301,37 @@ class SystemAccess(ctx: Context) {
     }
 
     fun readCpuUsageFallback(): Float {
-        return try {
-            val p = Runtime.getRuntime().exec(arrayOf("top", "-n", "1", "-b"))
-            val br = BufferedReader(InputStreamReader(p.inputStream))
-            var line: String?
-            while (br.readLine().also { line = it } != null) {
-                val l = line?.lowercase(Locale.US) ?: ""
-                if (l.contains("user") && l.contains("sys") && (l.contains("%") || l.contains("cpu"))) {
-                    val u = parseCpuFromTopLine(l)
-                    if (u >= 0) {
-                        br.close()
-                        p.destroy()
-                        return u
-                    }
+        // Optimized: Use the persistent shell for 'top' if possible to avoid spawn overhead
+        val cmd = "top -n 1 -b"
+        val output = if (rootAvailable) shell.exec(cmd) else {
+            // Fallback to normal exec if no root
+            try {
+                val p = Runtime.getRuntime().exec(cmd.split(" ").toTypedArray())
+                val br = BufferedReader(InputStreamReader(p.inputStream))
+                val sb = StringBuilder()
+                var line: String?
+                while (br.readLine().also { line = it } != null) {
+                    sb.append(line).append("\n")
+                }
+                sb.toString()
+            } catch (e: Exception) { "" }
+        }
+        
+        return parseTopOutput(output ?: "")
+    }
+
+    private fun parseTopOutput(output: String): Float {
+        try {
+            output.lines().forEach { line ->
+                val l = line.lowercase(java.util.Locale.US)
+                if (l.contains("user") && l.contains("sys")) {
+                    // Try parsing "400%cpu 14%user 0%nice 20%sys..."
+                    // or "User 12%, System 10%..."
+                    return parseCpuFromTopLine(l)
                 }
             }
-            br.close()
-            p.destroy()
-            -1f
-        } catch (ignored: Exception) {
-            -1f
-        }
+        } catch (ignored: Exception) {}
+        return -1f
     }
 
     private fun parseCpuFromTopLine(line: String): Float {
@@ -251,24 +346,6 @@ class SystemAccess(ctx: Context) {
                     }
                 }
                 if (total > 0) return total
-            }
-            if (line.contains("idle")) {
-                val words = line.trim().split(Regex("\\s+"))
-                var idle = -1f
-                var total = -1f
-                for (w in words) {
-                    if (w.contains("idle")) {
-                        val m = Regex("""(\d+(?:\.\d+)?)\s*%""").find(w)
-                        if (m != null) idle = m.groupValues[1].toFloat()
-                    } else if (w.contains("cpu")) {
-                        val m = Regex("""(\d+(?:\.\d+)?)\s*%""").find(w)
-                        if (m != null) total = m.groupValues[1].toFloat()
-                    }
-                }
-                if (total > 0 && idle >= 0) {
-                    val usage = (total - idle) * 100f / total
-                    return usage.coerceIn(0f, 100f)
-                }
             }
             -1f
         } catch (ignored: Exception) {

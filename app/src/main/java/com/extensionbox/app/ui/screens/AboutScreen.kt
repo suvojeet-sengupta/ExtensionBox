@@ -22,17 +22,22 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.extensionbox.app.BuildConfig
-import com.extensionbox.app.R
-import com.extensionbox.app.network.UpdateChecker
-import com.extensionbox.app.ui.components.AppCard
-import kotlinx.coroutines.launch
+import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Refresh
+import com.extensionbox.app.SystemAccess
+import androidx.compose.ui.platform.LocalContext
 
 @Composable
 fun AboutScreen() {
+    val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val uriHandler = LocalUriHandler.current
+    
+    // System Access State
+    var sysAccess by remember { mutableStateOf(SystemAccess(context)) }
+    var accessTier by remember { mutableStateOf(sysAccess.tier) }
+    var rootProvider by remember { mutableStateOf(sysAccess.rootProvider) }
+
     var updateStatus by remember { mutableStateOf("Check for Updates") }
     var isChecking by remember { mutableStateOf(false) }
 
@@ -87,6 +92,58 @@ fun AboutScreen() {
                 lineHeight = 22.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+
+        // --- System Access Status (Interactive) ---
+        AppCard {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Surface(
+                    shape = CircleShape,
+                    color = if (sysAccess.isEnhanced()) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.errorContainer,
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.Security,
+                            contentDescription = null,
+                            tint = if (sysAccess.isEnhanced()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                }
+                Spacer(Modifier.width(16.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "System Access",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = accessTier,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.Bold
+                    )
+                    if (rootProvider != SystemAccess.RootProvider.NONE) {
+                        Text(
+                            text = "via ${rootProvider.label}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+                IconButton(onClick = {
+                    // Re-instantiate to trigger checks again
+                    sysAccess = SystemAccess(context)
+                    accessTier = sysAccess.tier
+                    rootProvider = sysAccess.rootProvider
+                }) {
+                    Icon(Icons.Default.Refresh, contentDescription = "Refresh Access")
+                }
+            }
         }
 
         // --- Update Section ---
