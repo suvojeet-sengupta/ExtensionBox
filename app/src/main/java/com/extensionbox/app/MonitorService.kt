@@ -14,6 +14,7 @@ import com.extensionbox.app.modules.*
 import com.extensionbox.app.widgets.ModuleWidgetProvider
 import kotlinx.coroutines.*
 import java.util.Calendar
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.abs
 
 class MonitorService : Service() {
@@ -27,7 +28,7 @@ class MonitorService : Service() {
         private const val NIGHT_SUMMARY_ID = 2099
 
         private var instance: MonitorService? = null
-        private val moduleData = HashMap<String, LinkedHashMap<String, String>>()
+        private val moduleData = ConcurrentHashMap<String, LinkedHashMap<String, String>>()
 
         fun getInstance(): MonitorService? = instance
         fun getModuleData(key: String): LinkedHashMap<String, String>? = moduleData[key]
@@ -35,12 +36,27 @@ class MonitorService : Service() {
 
     private lateinit var sysAccess: SystemAccess
     private lateinit var modules: List<Module>
-    private val lastTickTime = HashMap<String, Long>()
+    private val lastTickTime = ConcurrentHashMap<String, Long>()
     private var nightSummarySent = false
+    private var isScreenOn = true
 
     private val serviceJob = SupervisorJob()
     private val serviceScope = CoroutineScope(Dispatchers.Main + serviceJob)
     private var tickerJob: Job? = null
+
+    private val screenReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            when (intent.action) {
+                Intent.ACTION_SCREEN_ON -> {
+                    isScreenOn = true
+                    startTicker() // Immediate refresh on wake
+                }
+                Intent.ACTION_SCREEN_OFF -> {
+                    isScreenOn = false
+                }
+            }
+        }
+    }
 
     fun getFapModule(): FapCounterModule? {
         return if (::modules.isInitialized) modules.filterIsInstance<FapCounterModule>().firstOrNull() else null
@@ -70,6 +86,12 @@ class MonitorService : Service() {
 
         startForeground(NOTIF_ID, buildNotification())
         
+        val filter = android.content.IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_ON)
+            addAction(Intent.ACTION_SCREEN_OFF)
+        }
+        registerReceiver(screenReceiver, filter)
+
         serviceScope.launch(Dispatchers.IO) {
             syncModules()
             startTicker()
@@ -128,6 +150,9 @@ class MonitorService : Service() {
     override fun onDestroy() {
         tickerJob?.cancel()
         serviceJob.cancel()
+        try {
+            unregisterReceiver(screenReceiver)
+        } catch (ignored: Exception) {}
         
         runBlocking {
             withContext(Dispatchers.IO) {
@@ -169,11 +194,14 @@ class MonitorService : Service() {
             for (m in modules) {
                 if (!m.alive()) continue
                 val last = lastTickTime[m.key()] ?: 0L
-                if (now - last >= m.tickIntervalMs()) {
+                val interval = if (isScreenOn) m.tickIntervalMs() else m.tickIntervalMs() * 3 // Slow down 3x when screen off
+                if (now - last >= interval) {
                     m.tick()
                     m.checkAlerts(this@MonitorService)
                     lastTickTime[m.key()] = now
-                    moduleData[m.key()] = m.dataPoints()
+                    m.dataPoints().let { dp ->
+                        moduleData[m.key()] = dp
+                    }
                     changed = true
                 }
             }
@@ -242,6 +270,8 @@ class MonitorService : Service() {
 
     private fun calculateNextDelay(): Long {
         if (!::modules.isInitialized) return 5000L
+        if (!isScreenOn) return 30000L // 30s delay when screen off
+
         val now = SystemClock.elapsedRealtime()
         var minDelay = Long.MAX_VALUE
         for (m in modules) {

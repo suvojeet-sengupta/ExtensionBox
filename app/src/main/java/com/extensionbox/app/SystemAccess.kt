@@ -84,7 +84,9 @@ class SystemAccess(ctx: Context) {
     }
 
     private val rootAvailable: Boolean = detectRoot()
-    
+    private val cache = java.util.concurrent.ConcurrentHashMap<String, Pair<String?, Long>>()
+    private val CACHE_TTL = 1000L // 1 second
+
     private fun shizukuAvailableNow(): Boolean {
         return try {
             Shizuku.pingBinder() && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
@@ -103,6 +105,17 @@ class SystemAccess(ctx: Context) {
     fun isEnhanced(): Boolean = rootAvailable || shizukuAvailableNow()
 
     fun readSysFile(path: String): String? {
+        val now = System.currentTimeMillis()
+        cache[path]?.let { (value, timestamp) ->
+            if (now - timestamp < CACHE_TTL) return value
+        }
+
+        val result = readSysFileInternal(path)
+        cache[path] = result to now
+        return result
+    }
+
+    private fun readSysFileInternal(path: String): String? {
         readFileDirect(path)?.let { return it }
         if (rootAvailable) readFileRoot(path)?.let { return it }
         if (shizukuAvailableNow()) readFileShizuku(path)?.let { return it }
