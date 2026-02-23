@@ -1,4 +1,4 @@
-name: Release APK (SIGNED)
+name: Release Signed APK
 
 on:
   push:
@@ -29,6 +29,10 @@ jobs:
         env:
           SIGNING_KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
         run: |
+          if [ -z "$SIGNING_KEYSTORE_BASE64" ]; then
+            echo "Error: SIGNING_KEYSTORE_BASE64 secret is missing!"
+            exit 1
+          fi
           echo "$SIGNING_KEYSTORE_BASE64" | base64 -d > $RUNNER_TEMP/release.jks
           ls -la $RUNNER_TEMP/release.jks
 
@@ -38,7 +42,7 @@ jobs:
           KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
         run: |
-          bash ./gradlew :app:assembleRelease --stacktrace \
+          ./gradlew :app:assembleRelease --stacktrace \
             -Pandroid.injected.signing.store.file=$RUNNER_TEMP/release.jks \
             -Pandroid.injected.signing.store.password=$STORE_PASSWORD \
             -Pandroid.injected.signing.key.alias=$KEY_ALIAS \
@@ -47,14 +51,27 @@ jobs:
       - name: Locate APK
         run: |
           APK="$(find app/build/outputs/apk -type f -name '*.apk' | grep -i release | head -n 1)"
+          if [ -z "$APK" ]; then
+            echo "Error: APK not found!"
+            exit 1
+          fi
           echo "APK=$APK" >> $GITHUB_ENV
-          echo "$APK"
-          test -n "$APK"
 
       - name: Rename APK
-        run: cp "$APK" "ExtensionBox-${{ github.ref_name }}.apk"
+        run: |
+          VERSION_NAME=$(grep "versionName" app/build.gradle | head -1 | cut -d '"' -f 2)
+          mv "$APK" "ExtensionBox-${VERSION_NAME}-signed.apk"
+          echo "RENAMED_APK=ExtensionBox-${VERSION_NAME}-signed.apk" >> $GITHUB_ENV
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: ExtensionBox-Signed-APK
+          path: ${{ env.RENAMED_APK }}
 
       - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: ExtensionBox-${{ github.ref_name }}.apk
+          files: ${{ env.RENAMED_APK }}
+          generate_release_notes: true
