@@ -360,4 +360,9 @@ class SystemAccess(ctx: Context) {
             1
         }
     }
+
+    fun onDestroy() {
+        shell.close()
+        cache.clear()
+    }
 }

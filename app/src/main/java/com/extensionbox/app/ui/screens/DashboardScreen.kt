@@ -29,9 +29,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.foundation.Canvas
 import androidx.core.content.ContextCompat
 import com.extensionbox.app.MonitorService
 import com.extensionbox.app.Prefs
+import com.extensionbox.app.db.ModuleDataEntity
 import com.extensionbox.app.ui.ModuleRegistry
 import com.extensionbox.app.ui.components.AppCard
 import kotlinx.coroutines.delay
@@ -51,6 +55,7 @@ fun DashboardScreen(viewModel: DashboardViewModel = viewModel()) {
     val isRunning by viewModel.isRunning.collectAsState()
     val activeCount by viewModel.activeCount.collectAsState()
     val dashData by viewModel.dashData.collectAsState()
+    val historyData by viewModel.historyData.collectAsState()
     val visibleModules by viewModel.visibleModules.collectAsState()
 
     val lazyListState = rememberLazyListState()
@@ -96,6 +101,7 @@ fun DashboardScreen(viewModel: DashboardViewModel = viewModel()) {
                         DashCard(
                             key = key,
                             data = data,
+                            history = historyData[key] ?: emptyList(),
                             isExpanded = viewModel.isExpanded(key),
                             onExpandToggle = { viewModel.toggleExpansion(key) },
                             reorderableItemScope = this,
@@ -194,6 +200,7 @@ fun StatusHero(isRunning: Boolean, activeCount: Int, context: android.content.Co
 fun DashCard(
     key: String, 
     data: Map<String, String>, 
+    history: List<ModuleDataEntity>,
     isExpanded: Boolean, 
     onExpandToggle: () -> Unit,
     reorderableItemScope: ReorderableCollectionItemScope? = null,
@@ -293,6 +300,12 @@ fun DashCard(
                     
                     // Display data in a 2-column grid if there are many items
                     val items = data.toList()
+                    
+                    if (isExpanded && history.isNotEmpty()) {
+                        ModuleChart(key, history)
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
+
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         items.chunked(2).forEach { rowItems ->
                             Row(modifier = Modifier.fillMaxWidth()) {
@@ -325,5 +338,69 @@ fun DashCard(
                 }
             }
         }
+    }
+}
+
+@Composable
+fun ModuleChart(moduleKey: String, history: List<ModuleDataEntity>) {
+    val points = remember(history) {
+        history.mapNotNull { entity ->
+            val raw = when (moduleKey) {
+                "battery" -> entity.data["battery.level"]?.removeSuffix("%")
+                "cpuram" -> entity.data["cpu.usage"]?.removeSuffix("%")
+                "network" -> entity.data["net.down_speed"]?.substringBefore(" ")
+                "data" -> entity.data["dat.daily_total"]?.substringBefore(" ")
+                else -> null
+            }
+            raw?.toFloatOrNull()
+        }
+    }
+
+    if (points.size < 2) return
+
+    Column {
+        Text(
+            text = "Trend (Last 15m)",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+        Sparkline(
+            points = points,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(60.dp),
+            color = MaterialTheme.colorScheme.primary
+        )
+    }
+}
+
+@Composable
+fun Sparkline(
+    points: List<Float>,
+    modifier: Modifier = Modifier,
+    color: Color = MaterialTheme.colorScheme.primary
+) {
+    val min = points.minOrNull() ?: 0f
+    val max = points.maxOrNull() ?: 1f
+    val range = if (max - min == 0f) 1f else max - min
+
+    Canvas(modifier = modifier) {
+        val width = size.width
+        val height = size.height
+        val stepX = width / (points.size - 1)
+
+        val path = Path()
+        points.forEachIndexed { index, value ->
+            val x = index * stepX
+            val y = height - ((value - min) / range * height)
+            if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
+        }
+
+        drawPath(
+            path = path,
+            color = color,
+            style = Stroke(width = 2.dp.toPx())
+        )
     }
 }

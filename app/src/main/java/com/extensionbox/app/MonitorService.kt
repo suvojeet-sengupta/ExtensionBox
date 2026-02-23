@@ -13,6 +13,8 @@ import androidx.core.app.NotificationCompat
 import com.extensionbox.app.modules.*
 import com.extensionbox.app.widgets.ModuleWidgetProvider
 import kotlinx.coroutines.*
+import com.extensionbox.app.db.AppDatabase
+import com.extensionbox.app.db.ModuleDataEntity
 import java.util.Calendar
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.abs
@@ -36,6 +38,7 @@ class MonitorService : Service() {
 
     private lateinit var sysAccess: SystemAccess
     private lateinit var modules: List<Module>
+    private lateinit var database: AppDatabase
     private val lastTickTime = ConcurrentHashMap<String, Long>()
     private var nightSummarySent = false
     private var isScreenOn = true
@@ -66,6 +69,7 @@ class MonitorService : Service() {
         super.onCreate()
         instance = this
         createChannels()
+        database = AppDatabase.getDatabase(this)
 
         sysAccess = SystemAccess(this)
         modules = listOf(
@@ -154,6 +158,10 @@ class MonitorService : Service() {
             unregisterReceiver(screenReceiver)
         } catch (ignored: Exception) {}
         
+        if (::sysAccess.isInitialized) {
+            sysAccess.onDestroy()
+        }
+        
         runBlocking {
             withContext(Dispatchers.IO) {
                 stopAll()
@@ -199,9 +207,12 @@ class MonitorService : Service() {
                     m.tick()
                     m.checkAlerts(this@MonitorService)
                     lastTickTime[m.key()] = now
-                    m.dataPoints().let { dp ->
-                        moduleData[m.key()] = dp
-                    }
+                    val dp = m.dataPoints()
+                    moduleData[m.key()] = dp
+                    
+                    // Save to database
+                    database.moduleDataDao().insert(ModuleDataEntity(moduleKey = m.key(), data = dp))
+                    
                     changed = true
                 }
             }
@@ -239,6 +250,12 @@ class MonitorService : Service() {
             doDayRollover()
             Prefs.setInt(this, "rollover_day", today)
             Prefs.setInt(this, "rollover_year", thisYear)
+
+            // Keep only 24 hours of data
+            serviceScope.launch(Dispatchers.IO) {
+                val oneDayAgo = System.currentTimeMillis() - (24 * 60 * 60 * 1000)
+                database.moduleDataDao().clearOldData(oneDayAgo)
+            }
         }
 
         if (thisMonth != lastMonth || thisYear != lastYear) {

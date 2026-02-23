@@ -8,6 +8,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.extensionbox.app.MonitorService
 import com.extensionbox.app.Prefs
+import com.extensionbox.app.db.AppDatabase
+import com.extensionbox.app.db.ModuleDataEntity
 import com.extensionbox.app.ui.ModuleRegistry
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -17,6 +19,7 @@ import kotlinx.coroutines.launch
 
 class DashboardViewModel(application: Application) : AndroidViewModel(application) {
     private val context = application.applicationContext
+    private val database = AppDatabase.getDatabase(context)
 
     private val _isRunning = MutableStateFlow(Prefs.isRunning(context))
     val isRunning: StateFlow<Boolean> = _isRunning.asStateFlow()
@@ -26,6 +29,9 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
 
     private val _dashData = MutableStateFlow<Map<String, Map<String, String>>>(emptyMap())
     val dashData: StateFlow<Map<String, Map<String, String>>> = _dashData.asStateFlow()
+
+    private val _historyData = MutableStateFlow<Map<String, List<ModuleDataEntity>>>(emptyMap())
+    val historyData: StateFlow<Map<String, List<ModuleDataEntity>>> = _historyData.asStateFlow()
 
     val moduleOrder = mutableStateListOf<String>()
     val expandedStates = mutableStateMapOf<String, Boolean>()
@@ -87,6 +93,9 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
                 
                 var count = 0
                 val dataMap = mutableMapOf<String, Map<String, String>>()
+                val histMap = mutableMapOf<String, List<ModuleDataEntity>>()
+                val fifteenMinsAgo = System.currentTimeMillis() - (15 * 60 * 1000)
+
                 for (i in 0 until ModuleRegistry.count()) {
                     val key = ModuleRegistry.keyAt(i)
                     if (Prefs.isModuleEnabled(context, key, ModuleRegistry.defAt(i))) {
@@ -95,12 +104,19 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
                             val moduleData = MonitorService.getModuleData(key)
                             if (moduleData != null && moduleData.isNotEmpty()) {
                                 dataMap[key] = moduleData
+                                
+                                // Fetch history
+                                val history = database.moduleDataDao().getHistoryList(key, fifteenMinsAgo)
+                                if (history.isNotEmpty()) {
+                                    histMap[key] = history
+                                }
                             }
                         }
                     }
                 }
                 _activeCount.value = count
                 _dashData.value = dataMap
+                _historyData.value = histMap
                 updateVisibleModules()
                 
                 delay(2000)
