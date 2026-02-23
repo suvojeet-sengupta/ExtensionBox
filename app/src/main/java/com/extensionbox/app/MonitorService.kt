@@ -45,8 +45,8 @@ class MonitorService : Service() {
     private var tickerJob: Job? = null
 
     private val screenReceiver = object : android.content.BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) {
-            when (intent.action) {
+        override fun onReceive(context: android.content.Context?, intent: android.content.Intent?) {
+            when (intent?.action) {
                 Intent.ACTION_SCREEN_ON -> {
                     isScreenOn = true
                     startTicker() // Immediate refresh on wake

@@ -22,6 +22,13 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.extensionbox.app.BuildConfig
+import com.extensionbox.app.R
+import com.extensionbox.app.network.UpdateChecker
+import com.extensionbox.app.network.Release
+import com.extensionbox.app.ui.components.AppCard
+import kotlinx.coroutines.launch
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Refresh
 import com.extensionbox.app.SystemAccess
