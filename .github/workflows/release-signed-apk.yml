@@ -27,26 +27,23 @@ jobs:
 
       - name: Decode keystore
         env:
-          SIGNING_KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
         run: |
-          if [ -z "$SIGNING_KEYSTORE_BASE64" ]; then
-            echo "Error: SIGNING_KEYSTORE_BASE64 secret is missing!"
+          if [ -z "$KEYSTORE_B64" ]; then
+            echo "Error: KEYSTORE_B64 secret is missing!"
             exit 1
           fi
-          echo "$SIGNING_KEYSTORE_BASE64" | base64 -d > $RUNNER_TEMP/release.jks
+          echo "$KEYSTORE_B64" | base64 -d > $RUNNER_TEMP/release.jks
           ls -la $RUNNER_TEMP/release.jks
 
       - name: Build SIGNED release APK
         env:
-          STORE_PASSWORD: ${{ secrets.SIGNING_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+          KEYSTORE_PATH: ${{ runner.temp }}/release.jks
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          ./gradlew :app:assembleRelease --stacktrace \
-            -Pandroid.injected.signing.store.file=$RUNNER_TEMP/release.jks \
-            -Pandroid.injected.signing.store.password=$STORE_PASSWORD \
-            -Pandroid.injected.signing.key.alias=$KEY_ALIAS \
-            -Pandroid.injected.signing.key.password=$KEY_PASSWORD
+          ./gradlew :app:assembleRelease --stacktrace
 
       - name: Locate APK
         run: |
