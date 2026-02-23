@@ -292,7 +292,7 @@ fun KernelCard(
                         items.chunked(2).forEach { rowItems ->
                             Row(modifier = Modifier.fillMaxWidth()) {
                                 rowItems.forEach { pair ->
-                                    val label = pair.first.substringAfterLast('.').replace("_", " ").capitalize()
+                                    val label = pair.first.substringAfterLast('.').replace("_", " ").replaceFirstChar { it.uppercase() }
                                     StatItem(label = label, value = pair.second, modifier = Modifier.weight(1f))
                                 }
                                 if (rowItems.size == 1) Spacer(Modifier.weight(1f))
